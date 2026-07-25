@@ -65,7 +65,11 @@ export function createMcpRouter(
     next();
   });
 
-  router.post('/', authenticate, express.json({ limit: '64mb' }), async (req, res) => {
+  // Files arrive base64-encoded inside JSON, so the body limit has to sit well
+  // above the configured per-site byte limit.
+  const bodyLimit = Math.max(8, Math.ceil((config.maxSiteBytes * 1.6) / (1024 * 1024)));
+
+  router.post('/', authenticate, express.json({ limit: `${bodyLimit}mb` }), async (req, res) => {
     const server = createMcpServer(ctx);
     // Stateless with plain JSON responses: nothing to keep between requests, and
     // a single replica behind an ingress needs no server-initiated streams.

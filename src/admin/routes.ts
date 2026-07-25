@@ -221,7 +221,9 @@ export function createAdminRouter(
 
 function safeNext(value: unknown): string {
   if (typeof value !== 'string') return '/admin';
-  if (!value.startsWith('/admin') || value.startsWith('//')) return '/admin';
+  // Backslashes are normalised to slashes by browsers, so they can escape the
+  // origin the same way a leading "//" does.
+  if (!value.startsWith('/admin') || value.startsWith('//') || value.includes('\\')) return '/admin';
   return value;
 }
 

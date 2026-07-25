@@ -31,7 +31,7 @@ export class SiteServer {
     const { site } = target;
 
     if (site.visibility === 'disabled') {
-      this.sendNotFound(res, site, 404);
+      this.sendNotFound(res, target);
       return;
     }
 
@@ -48,14 +48,14 @@ export class SiteServer {
 
     const resolved = this.store.resolveRequest(site, inner);
     if (!resolved) {
-      this.sendNotFound(res, site, 404);
+      this.sendNotFound(res, target);
       return;
     }
 
     this.applyHeaders(res, site, target, resolved.contentType);
     if (resolved.contentType.startsWith('text/html')) this.store.recordView(site.id);
     res.sendFile(resolved.absolute, { dotfiles: 'allow' }, err => {
-      if (err && !res.headersSent) this.sendNotFound(res, site, 404);
+      if (err && !res.headersSent) this.sendNotFound(res, target);
     });
   }
 
@@ -190,6 +190,9 @@ export class SiteServer {
   private safeNext(target: SiteTarget, candidate: string): string {
     const fallback = `${target.basePath}/`;
     if (!candidate.startsWith('/') || candidate.startsWith('//')) return fallback;
+    // Browsers normalise backslashes to slashes, so "/\evil.example" would leave
+    // the origin exactly like "//evil.example" does.
+    if (candidate.includes('\\')) return fallback;
     if (candidate.includes('/__a2w/')) return fallback;
     if (target.hostBased) return candidate;
     return candidate.startsWith(`${target.basePath}/`) ? candidate : fallback;
@@ -228,17 +231,22 @@ export class SiteServer {
     }
   }
 
-  private sendNotFound(res: Response, site: SiteRow, status: number): void {
+  /**
+   * A site's own 404.html is user content, so it goes out with the same headers
+   * (sandbox CSP included) as any other page from that site.
+   */
+  private sendNotFound(res: Response, target: SiteTarget): void {
+    const { site } = target;
     const custom = site.visibility === 'disabled' ? undefined : this.store.notFoundPage(site);
-    res.status(status);
-    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.status(404);
     if (custom) {
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      this.applyHeaders(res, site, target, 'text/html; charset=utf-8');
       res.sendFile(custom, err => {
         if (err && !res.headersSent) this.sendHtml(res, notFoundPage());
       });
       return;
     }
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     this.sendHtml(res, notFoundPage());
   }
 

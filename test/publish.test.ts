@@ -118,6 +118,9 @@ test('multi-file publish serves assets and honours the custom 404 page', async (
   const missing = await fetch(`${h.baseUrl}/s/multi/nothing-here`);
   assert.equal(missing.status, 404);
   assert.match(await missing.text(), /custom missing page/);
+  // The custom 404 is user content too, so it must carry the same protections.
+  assert.match(missing.headers.get('content-security-policy') ?? '', /sandbox/);
+  assert.equal(missing.headers.get('x-content-type-options'), 'nosniff');
 });
 
 test('traversal attempts against served sites are refused', async () => {

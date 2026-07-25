@@ -174,7 +174,7 @@ Optional:
 | `A2W_SITE_SANDBOX` | `auto` | `auto` sandboxes only same-origin site content; `always` / `never` override. |
 | `A2W_DATA_DIR` | `/data` | Database and site files. |
 | `A2W_PORT` / `A2W_BIND` | `8080` / `0.0.0.0` | Listener. |
-| `A2W_TRUST_PROXY` | `true` | Trust one hop of `X-Forwarded-*`. |
+| `A2W_TRUST_PROXY` | `true` | Trust one hop of `X-Forwarded-*`. Set to `false` if the app is exposed directly, or clients can spoof the IP that login throttling counts against. |
 | `A2W_MAX_FILE_BYTES` | `5242880` | Per-file limit. |
 | `A2W_MAX_SITE_BYTES` | `52428800` | Per-site limit. |
 | `A2W_MAX_FILES` | `200` | Files per site. |

@@ -26,9 +26,9 @@ export function isAllowedRedirectUri(config: Config, candidate: string): boolean
 
   if (url.protocol === 'http:' && isLoopback(url.hostname)) return true;
 
-  // Allow the app's own origin so the operator can host a test client there.
-  if (`${url.protocol}//${url.host}` === config.publicUrl) return true;
-
+  // Deliberately not allowing this app's own origin: authorization codes would
+  // then be delivered into a URL served by a published page. Operators who want
+  // that can list the exact URI in A2W_EXTRA_REDIRECT_URIS.
   return false;
 }
 

@@ -65,7 +65,14 @@ test('authorization server metadata declares PKCE, DCR and public clients', asyn
 });
 
 test('registration rejects redirect URIs outside the policy', async () => {
-  for (const uri of ['https://evil.example.com/callback', 'http://8.8.8.8:80/cb', 'not-a-url']) {
+  for (const uri of [
+    'https://evil.example.com/callback',
+    'http://8.8.8.8:80/cb',
+    'not-a-url',
+    'https://claude.ai.evil.example.com/cb',
+    'https://user:pass@claude.ai/cb',
+    'http://claude.ai/cb',
+  ]) {
     const res = await register({ redirect_uris: [uri] });
     assert.equal(res.status, 400, `${uri} should be refused`);
     assert.match(JSON.stringify(await json(res)), /redirect_uri/);
