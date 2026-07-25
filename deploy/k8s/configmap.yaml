@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent2web
+  namespace: agent2web
+data:
+  # Must match the host in ingress.yaml.
+  A2W_PUBLIC_URL: 'https://a2w.example.com'
+  A2W_DATA_DIR: '/data'
+  A2W_PORT: '8080'
+  # Behind an ingress controller, so X-Forwarded-* headers are trusted.
+  A2W_TRUST_PROXY: 'true'
+  # Uncomment together with the wildcard host in ingress.yaml.
+  # A2W_SITES_BASE_DOMAIN: 'sites.example.com'
+  A2W_KEEP_VERSIONS: '10'

@@ -11,8 +11,9 @@
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node build/src/index.js",
-    "test": "npm run build && node --test build/test/",
-    "gen-secrets": "node --experimental-strip-types src/cli/secrets.ts"
+    "dev": "npm run build && node --enable-source-maps --watch build/src/index.js",
+    "test": "npm run build && node --test build/test/*.test.js",
+    "gen-secrets": "npm run build --silent && node build/src/cli/secrets.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

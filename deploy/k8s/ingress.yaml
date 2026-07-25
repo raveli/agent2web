@@ -1,0 +1,56 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: agent2web
+  namespace: agent2web
+  annotations:
+    # k3s ships Traefik; change the class if you run ingress-nginx instead.
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - a2w.example.com
+      secretName: agent2web-tls
+    # Wildcard hosting for <slug>.sites.example.com. The certificate requires a
+    # DNS-01 solver — see deploy/README.md.
+    # - hosts:
+    #     - '*.sites.example.com'
+    #   secretName: agent2web-sites-tls
+    # A site's custom domain: add the host here after site_set_domain, and point
+    # its DNS at this ingress. cert-manager issues the certificate.
+    # - hosts:
+    #     - reports.customer.example
+    #   secretName: agent2web-reports-tls
+  rules:
+    - host: a2w.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: agent2web
+                port:
+                  name: http
+    # - host: '*.sites.example.com'
+    #   http:
+    #     paths:
+    #       - path: /
+    #         pathType: Prefix
+    #         backend:
+    #           service:
+    #             name: agent2web
+    #             port:
+    #               name: http
+    # - host: reports.customer.example
+    #   http:
+    #     paths:
+    #       - path: /
+    #         pathType: Prefix
+    #         backend:
+    #           service:
+    #             name: agent2web
+    #             port:
+    #               name: http

@@ -67,7 +67,12 @@ export function createMcpRouter(
 
   router.post('/', authenticate, express.json({ limit: '64mb' }), async (req, res) => {
     const server = createMcpServer(ctx);
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    // Stateless with plain JSON responses: nothing to keep between requests, and
+    // a single replica behind an ingress needs no server-initiated streams.
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true,
+    });
     res.on('close', () => {
       void transport.close();
       void server.close();
