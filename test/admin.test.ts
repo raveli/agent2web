@@ -34,7 +34,43 @@ test('signing in lists the published sites', async () => {
   assert.equal(page.status, 200);
   const body = await page.text();
   assert.match(body, /admin-demo/);
+  assert.match(body, /href="\/admin\/sites\/admin-demo"/, 'each row links to its own page');
+  // The list is for scanning: mutations belong on the site page.
+  assert.doesNotMatch(body, /action="\/admin\/sites\/[^"]+\/(access|domain|rollback|delete)"/);
   csrf = /name="csrf" value="([^"]+)"/.exec(body)![1]!;
+});
+
+test('the site page explains each control and carries every action', async () => {
+  const page = await get('/admin/sites/admin-demo');
+  assert.equal(page.status, 200);
+  const body = await page.text();
+
+  for (const action of ['access', 'domain', 'delete']) {
+    assert.match(body, new RegExp(`action="/admin/sites/admin-demo/${action}"`), action);
+  }
+  // Every access option is offered with a plain-language description.
+  for (const label of ['Anyone with the link', 'Password required', 'Not served']) {
+    assert.ok(body.includes(label), `missing option "${label}"`);
+  }
+  assert.match(body, /Returns 404 to visitors/);
+  // All three address forms are shown, and the reachable one is linked.
+  assert.match(body, /Addresses/);
+  assert.ok(body.includes(`${h.baseUrl}/s/admin-demo/`));
+  assert.match(body, /Delete admin-demo/);
+});
+
+test('the site page 404s to the list with a message for an unknown slug', async () => {
+  const res = await get('/admin/sites/no-such-site');
+  assert.equal(res.status, 303);
+  const location = decodeURIComponent(res.headers.get('location') ?? '');
+  assert.match(location, /^\/admin\?err=/);
+  assert.match(location, /No site called "no-such-site"/);
+});
+
+test('the site page requires a session', async () => {
+  const res = await fetch(`${h.baseUrl}/admin/sites/admin-demo`, { redirect: 'manual' });
+  assert.equal(res.status, 302);
+  assert.match(res.headers.get('location') ?? '', /^\/admin\/login\?next=/);
 });
 
 test('mutations without a valid CSRF token are refused', async () => {
@@ -50,17 +86,22 @@ test('access can be changed from the admin UI', async () => {
     password: 'admin-set-password',
   });
   assert.equal(res.status, 303);
-  assert.match(res.headers.get('location') ?? '', /ok=/);
+  // Actions return to the site they changed, carrying a message about it.
+  const location = decodeURIComponent(res.headers.get('location') ?? '');
+  assert.match(location, /^\/admin\/sites\/admin-demo\?ok=/);
+  assert.match(location, /Password saved/);
   assert.equal((await fetch(`${h.baseUrl}/s/admin-demo/`)).status, 401);
 
   await post('/admin/sites/admin-demo/access', { csrf, visibility: 'public' });
   assert.equal((await fetch(`${h.baseUrl}/s/admin-demo/`)).status, 200);
 });
 
-test('a failed action reports the reason instead of crashing', async () => {
+test('a failed action reports the reason on the site page', async () => {
   const res = await post('/admin/sites/admin-demo/domain', { csrf, domain: 'not a hostname' });
   assert.equal(res.status, 303);
-  assert.match(decodeURIComponent(res.headers.get('location') ?? ''), /err=.*valid hostname/);
+  const location = decodeURIComponent(res.headers.get('location') ?? '');
+  assert.match(location, /^\/admin\/sites\/admin-demo\?err=/);
+  assert.match(location, /valid hostname/);
 });
 
 test('rollback and delete work from the admin UI', async () => {

@@ -17,6 +17,7 @@ import { messageFor } from '../util/errors.js';
 import {
   adminLoginPage,
   connectionsPage,
+  siteDetailPage,
   sitesPage,
   type ConnectionEntry,
   type SiteListEntry,
@@ -105,12 +106,32 @@ export function createAdminRouter(
   router.get('/', requireSession, (req, res) => {
     const { rows } = store.listSites(200, 0);
     const entries: SiteListEntry[] = rows.map(site => {
-      const versions = store.listVersions(site.id, 20);
+      const versions = store.listVersions(site.id, 1000);
       const current = versions.find(v => v.id === site.current_version_id);
-      return { site, versions, bytes: current?.bytes ?? 0 };
+      return { site, versionCount: versions.length, bytes: current?.bytes ?? 0 };
     });
     res.status(200).send(
       sitesPage(config, entries, csrfToken(config.secret, res.locals.sessionId as string), flash(req)),
+    );
+  });
+
+  router.get('/sites/:slug', requireSession, (req, res) => {
+    const site = store.getSiteBySlug(String(req.params.slug));
+    if (!site) {
+      res.redirect(303, `/admin?err=${encodeURIComponent(`No site called "${req.params.slug}".`)}`);
+      return;
+    }
+    res.status(200).send(
+      siteDetailPage(
+        config,
+        {
+          site,
+          versions: store.listVersions(site.id, 1000),
+          files: site.current_version_id ? store.listFiles(site.current_version_id) : [],
+        },
+        csrfToken(config.secret, res.locals.sessionId as string),
+        flash(req),
+      ),
     );
   });
 
@@ -151,18 +172,27 @@ export function createAdminRouter(
     );
   });
 
-  const action = (handler: (req: Request) => string) => [
+  /**
+   * Wraps a mutation so it always lands back on a page with a message. Handlers
+   * return where to go next, which is the site's own page unless the site is
+   * gone by then.
+   */
+  const action = (handler: (req: Request) => { message: string; to: string }) => [
     requireSession,
     formParser,
     requireCsrf,
     (req: Request, res: Response) => {
       try {
-        res.redirect(303, `/admin?ok=${encodeURIComponent(handler(req))}`);
+        const { message, to } = handler(req);
+        res.redirect(303, `${to}?ok=${encodeURIComponent(message)}`);
       } catch (err) {
-        res.redirect(303, `/admin?err=${encodeURIComponent(messageFor(err))}`);
+        const back = `/admin/sites/${encodeURIComponent(String(req.params.slug))}`;
+        res.redirect(303, `${back}?err=${encodeURIComponent(messageFor(err))}`);
       }
     },
   ];
+
+  const sitePath = (slug: string) => `/admin/sites/${encodeURIComponent(slug)}`;
 
   router.post(
     '/sites/:slug/access',
@@ -171,7 +201,15 @@ export function createAdminRouter(
       const visibility = String(body.visibility ?? 'public') as Visibility;
       const password = typeof body.password === 'string' && body.password ? body.password : null;
       const site = store.setAccess(String(req.params.slug), visibility, password);
-      return `${site.slug}: access set to ${site.visibility}`;
+      const message =
+        site.visibility === 'password'
+          ? password
+            ? 'Password saved. Anyone who unlocked the site with the old one has to enter the new one.'
+            : 'Visitors now need the password.'
+          : site.visibility === 'disabled'
+            ? 'The site now returns 404. Its files are kept.'
+            : 'Anyone with the link can now see the site.';
+      return { message, to: sitePath(site.slug) };
     }),
   );
 
@@ -181,9 +219,12 @@ export function createAdminRouter(
       const body = req.body as Record<string, unknown>;
       const domain = typeof body.domain === 'string' && body.domain.trim() ? body.domain.trim() : null;
       const site = store.setDomain(String(req.params.slug), domain);
-      return site.custom_domain
-        ? `${site.slug}: domain set to ${site.custom_domain} — point DNS at this server and add the host to your ingress`
-        : `${site.slug}: custom domain cleared`;
+      return {
+        message: site.custom_domain
+          ? `Answering for ${site.custom_domain}. Point its DNS at this server and add the host to your ingress.`
+          : 'Custom domain removed.',
+        to: sitePath(site.slug),
+      };
     }),
   );
 
@@ -192,7 +233,10 @@ export function createAdminRouter(
     ...action(req => {
       const body = req.body as Record<string, unknown>;
       const { site, version } = store.rollback(String(req.params.slug), String(body.version_id ?? ''));
-      return `${site.slug}: now serving version ${version.id}`;
+      return {
+        message: `Now serving the version published ${new Date(version.created_at).toISOString().slice(0, 16).replace('T', ' ')}Z.`,
+        to: sitePath(site.slug),
+      };
     }),
   );
 
@@ -200,7 +244,7 @@ export function createAdminRouter(
     '/sites/:slug/delete',
     ...action(req => {
       const site = store.deleteSite(String(req.params.slug));
-      return `${site.slug}: deleted`;
+      return { message: `Deleted ${site.slug}.`, to: '/admin' };
     }),
   );
 
