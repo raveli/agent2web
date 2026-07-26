@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agent2web · Testing it locally</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..900,0..100,0..1;1,9..144,300..900,0..100,0..1&family=Geist:wght@300..700&family=JetBrains+Mono:wght@300..600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-display:'Fraunces', Georgia, serif;
+  --font-body:'Geist', -apple-system, sans-serif;
+  --font-mono:'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --paper:#f7f2e8; --paper-2:#f1ead8;
+  --ink:#1a1814; --ink-2:#4a423a; --ink-3:#7a6f64;
+  --rule:#1a181418; --rule-strong:#1a181433;
+  --accent:#c8302a;
+  --good:#2c4a3e; --tint-good:#e3ebe2; --tint-warn:#f2e8d4; --warn:#a06a1f;
+  --max:900px;
+}
+* { box-sizing:border-box; }
+html { -webkit-text-size-adjust:100%; }
+body {
+  margin:0; background:var(--paper); color:var(--ink);
+  font:400 16px/1.62 var(--font-body);
+  font-feature-settings:"ss01" 1,"cv11" 1;
+  padding:0 clamp(20px,5vw,48px) 96px;
+}
+body::before {
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:
+    radial-gradient(circle at 25% 15%, #fff9 0%, transparent 52%),
+    radial-gradient(circle at 75% 85%, #f1ead8aa 0%, transparent 52%);
+  mix-blend-mode:multiply; opacity:.6;
+}
+.wrap { max-width:var(--max); margin:0 auto; position:relative; z-index:1; }
+
+/* Masthead */
+header.top { padding:52px 0 0; }
+.masthead {
+  display:flex; justify-content:space-between; align-items:baseline; gap:16px; flex-wrap:wrap;
+  font:400 10.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-3); border-bottom:1px solid var(--rule-strong); padding-bottom:12px;
+}
+.masthead strong { color:var(--ink); font-weight:500; letter-spacing:.16em; }
+h1 {
+  font-family:var(--font-display); font-variation-settings:"opsz" 144,"SOFT" 80,"WONK" 1;
+  font-weight:400; font-size:clamp(34px,5.4vw,54px); line-height:1.03;
+  margin:34px 0 14px; letter-spacing:-.015em;
+}
+h1 .it { font-style:italic; color:var(--accent); }
+.lede { font-size:18px; line-height:1.58; color:var(--ink-2); max-width:60ch; margin:0 0 6px; }
+.prereq {
+  margin:26px 0 0; padding:14px 18px; background:var(--paper-2);
+  border-left:3px solid var(--ink); font-size:14.5px; color:var(--ink-2);
+}
+.prereq b { color:var(--ink); }
+
+/* Steps */
+.step { display:grid; grid-template-columns:52px 1fr; gap:0 22px; padding:38px 0 0; }
+.step + .step { border-top:1px solid var(--rule); margin-top:38px; }
+.step-num {
+  font-family:var(--font-display); font-style:italic; font-weight:400;
+  font-size:40px; line-height:1; color:var(--accent); opacity:.85;
+  font-variation-settings:"opsz" 48,"SOFT" 40,"WONK" 1;
+}
+.step h2 {
+  font-family:var(--font-display); font-weight:400; font-size:23px; line-height:1.2;
+  margin:2px 0 8px; letter-spacing:-.01em;
+  font-variation-settings:"opsz" 30,"SOFT" 50;
+}
+.step > div > p { margin:0 0 14px; color:var(--ink-2); font-size:15px; max-width:66ch; }
+.step > div > p:last-child { margin-bottom:0; }
+
+/* Command + output */
+.cmd, .out {
+  font:400 13px/1.65 var(--font-mono); white-space:pre; overflow-x:auto;
+  padding:13px 16px; margin:0 0 12px; border-radius:2px;
+}
+.cmd { background:var(--ink); color:#f3ede1; border-left:3px solid var(--accent); }
+.cmd .c { color:#8d8377; }
+.out {
+  background:var(--paper-2); color:var(--ink-2); border-left:3px solid var(--rule-strong);
+  font-size:12.5px;
+}
+.out-label, .caption {
+  font:400 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-3); display:block; margin:0 0 6px;
+}
+code {
+  font-family:var(--font-mono); font-size:.87em;
+  background:#1a18140f; padding:1px 5px; border-radius:2px;
+}
+a { color:var(--accent); text-decoration-thickness:1px; text-underline-offset:2px; }
+
+/* Callout */
+.callout {
+  border-left:3px solid var(--warn); background:var(--tint-warn);
+  padding:15px 20px; margin:16px 0 0; font-size:14.5px; color:var(--ink-2);
+}
+.callout.good { border-left-color:var(--good); background:var(--tint-good); }
+.callout .label {
+  font:400 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-3); display:block; margin-bottom:5px;
+}
+
+/* Troubleshooting */
+section.trouble { padding-top:56px; margin-top:48px; border-top:2px solid var(--ink); }
+section.trouble h2 {
+  font-family:var(--font-display); font-weight:400; font-size:27px; margin:0 0 6px;
+  font-variation-settings:"opsz" 36,"SOFT" 60;
+}
+section.trouble h2 .it { font-style:italic; color:var(--accent); }
+table { width:100%; border-collapse:collapse; font-size:13.5px; margin-top:22px; }
+thead th {
+  text-align:left; font:400 10px/1 var(--font-mono); letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink-3);
+  padding:0 14px 9px 0; border-bottom:1.5px solid var(--ink);
+}
+tbody td { padding:13px 14px 13px 0; border-bottom:1px solid var(--rule); vertical-align:top; color:var(--ink-2); }
+tbody td:first-child { color:var(--ink); width:31%; }
+tbody tr:hover { background:#00000005; }
+
+abbr[title] {
+  text-decoration:underline dotted #1a181466; text-underline-offset:3px;
+  cursor:help; border:0;
+}
+abbr[title]:hover { text-decoration-color:var(--accent); }
+
+footer {
+  margin-top:56px; padding-top:18px; border-top:1px solid var(--rule-strong);
+  font:400 11px/1.7 var(--font-mono); letter-spacing:.06em; color:var(--ink-3);
+  display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
+}
+
+@media (max-width:640px) {
+  .step { grid-template-columns:1fr; gap:0; }
+  .step-num { font-size:30px; margin-bottom:6px; }
+  tbody td:first-child { width:auto; }
+}
+@media print {
+  body { background:#fff; padding:0; }
+  body::before { display:none; }
+  .cmd { background:#f2f2f2; color:#111; }
+  .step { page-break-inside:avoid; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="masthead">
+    <span><strong>agent2web</strong> · Runbook</span>
+    <span>Local testing · macOS · Node 22</span>
+  </div>
+  <h1>Running it <span class="it">on your laptop.</span></h1>
+  <p class="lede">
+    Everything except the Claude web connector can be exercised locally, including subdomain
+    hosting and the full <abbr title="Model Context Protocol — the protocol Claude uses to call external tools">MCP</abbr>
+    publish flow. Eight steps, about five minutes.
+  </p>
+  <p class="prereq">
+    <b>You need:</b> Node 22 or newer and this repository. Nothing else — no database, no Docker,
+    no DNS entries. Data lands in <code>./data</code>, which is gitignored.
+  </p>
+</header>
+
+<main>
+
+<div class="step">
+  <div class="step-num">01</div>
+  <div>
+    <h2>Install and run the test suite</h2>
+    <p>The suite boots a real server on an ephemeral port for most of its cases, so a clean pass
+    also proves your machine can run the app.</p>
+    <div class="cmd">npm install
+npm test</div>
+    <span class="out-label">Expect</span>
+    <div class="out"># tests 79
+# pass 79
+# fail 0</div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">02</div>
+  <div>
+    <h2>Generate secrets and write <code>.env</code></h2>
+    <p>Print a set of credentials and paste them into <code>.env</code>. Save the admin password
+    it shows — it is not stored anywhere else.</p>
+    <div class="cmd">npm run gen-secrets</div>
+    <p>Then create <code>.env</code> with those values plus the local settings:</p>
+    <div class="out">A2W_PUBLIC_URL=http://localhost:8080
+A2W_SECRET=&lt;generated&gt;
+A2W_ADMIN_PASSWORD_HASH=&lt;generated&gt;
+A2W_API_TOKEN=&lt;generated&gt;
+
+A2W_DATA_DIR=./data
+A2W_PORT=8080
+A2W_TRUST_PROXY=false
+A2W_SITES_BASE_DOMAIN=sites.localhost</div>
+    <div class="callout good">
+      <span class="label">Why sites.localhost</span>
+      macOS resolves any <code>*.localhost</code> name to 127.0.0.1, so subdomain hosting works
+      with no DNS setup. Leave the port off this value — it is a hostname, and the app appends its
+      own port when it builds URLs.
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">03</div>
+  <div>
+    <h2>Start the server</h2>
+    <p><code>npm start</code> does not read <code>.env</code> by itself, so export it first.
+    (<code>docker compose up</code> loads the file directly if you prefer that.)</p>
+    <div class="cmd">set -a && . ./.env && set +a && npm start</div>
+    <span class="out-label">Expect</span>
+    <div class="out">[agent2web] listening on 0.0.0.0:8080
+[agent2web] public URL   http://localhost:8080
+[agent2web] MCP endpoint http://localhost:8080/mcp
+[agent2web] sites at     http://localhost:8080/s/&lt;slug&gt;/ and http://&lt;slug&gt;.sites.localhost:8080/</div>
+    <p>Bad configuration stops the process here with the reason, rather than half-starting.
+    In another terminal:</p>
+    <div class="cmd">curl -s localhost:8080/healthz</div>
+    <div class="out">{"status":"ok","sites":0,"version":"0.1.0"}</div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">04</div>
+  <div>
+    <h2>Publish a page</h2>
+    <p>This is the same call Claude makes. Export <code>A2W_API_TOKEN</code> from your
+    <code>.env</code> first.</p>
+    <div class="cmd">curl -s localhost:8080/mcp \
+  -H "authorization: Bearer $A2W_API_TOKEN" \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{
+        "name":"site_publish",
+        "arguments":{"slug":"hello","html":"&lt;h1&gt;Hello from agent2web&lt;/h1&gt;"}}}'</div>
+    <span class="out-label">Expect (inside the JSON-RPC result)</span>
+    <div class="out">Published **hello** (1 file, 29 B)
+
+http://hello.sites.localhost:8080/
+Also at: http://localhost:8080/s/hello/</div>
+    <div class="callout">
+      <span class="label">Gotcha</span>
+      The <code>accept</code> header must list <em>both</em> <code>application/json</code> and
+      <code>text/event-stream</code>. That is the MCP spec, not a quirk of this server — omit
+      either and you get <code>406 Not Acceptable</code>.
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">05</div>
+  <div>
+    <h2>Compare the two URL forms</h2>
+    <p>Both addresses serve the same site at the same time. The difference is worth seeing,
+    because it decides how you deploy.</p>
+    <div class="cmd">open http://localhost:8080/s/hello/          <span class="c"># path-based</span>
+open http://hello.sites.localhost:8080/     <span class="c"># subdomain</span></div>
+    <p>Publish a page that loads <code>/style.css</code> and the subdomain version resolves it;
+    the path version returns 404, because the site is not at the origin root. Pages served from
+    the app's own origin also get a sandbox <abbr title="Content Security Policy — the header that constrains what a page may do">CSP</abbr>
+    that gives them an opaque origin, so they cannot reach your admin session. On their own
+    subdomain they do not.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">06</div>
+  <div>
+    <h2>Password-protect it</h2>
+    <div class="cmd">curl -s localhost:8080/mcp \
+  -H "authorization: Bearer $A2W_API_TOKEN" \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{
+        "name":"site_set_access",
+        "arguments":{"slug":"hello","visibility":"password","password":"open-sesame"}}}'
+
+curl -s -o /dev/null -w "%{http_code}\n" localhost:8080/s/hello/
+curl -s -o /dev/null -w "%{http_code}\n" -u :open-sesame localhost:8080/s/hello/</div>
+    <span class="out-label">Expect</span>
+    <div class="out">401   ← the unlock form
+200   ← HTTP Basic works, for scripts</div>
+    <p>In a browser you get a form instead. Changing the password later invalidates every
+    unlock cookie already issued.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">07</div>
+  <div>
+    <h2>Open the admin UI</h2>
+    <p>Sign in at <a href="http://localhost:8080/admin">localhost:8080/admin</a> with the admin
+    password from step 02. The list shows what is published and who can reach it; selecting a site
+    opens its own page for access, custom domain, versions, files and deletion.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">08</div>
+  <div>
+    <h2>Connect a real client</h2>
+    <p>Both credentials work locally. The static token skips the browser entirely; the
+    <abbr title="OAuth 2.1 — the authorization flow Claude's connectors require">OAuth</abbr>
+    flow uses a loopback callback, which the redirect policy allows on any port.</p>
+    <div class="cmd">npx @modelcontextprotocol/inspector       <span class="c"># then point it at http://localhost:8080/mcp</span>
+
+claude mcp add --transport http a2w-local http://localhost:8080/mcp \
+  --header "Authorization: Bearer $A2W_API_TOKEN"</div>
+    <div class="callout">
+      <span class="label">Not testable locally</span>
+      Claude web custom connectors need a public HTTPS URL with a certificate a browser trusts, so
+      that flow cannot run against localhost. To try it before deploying, expose the port with
+      <code>cloudflared tunnel --url http://localhost:8080</code> and set
+      <code>A2W_PUBLIC_URL</code> to the tunnel hostname — it must match exactly, since it is the
+      OAuth issuer and the audience of every token issued.
+    </div>
+  </div>
+</div>
+
+</main>
+
+<section class="trouble">
+  <h2>When it <span class="it">misbehaves.</span></h2>
+  <p class="lede" style="font-size:15px; margin-top:8px;">Every row here is a failure we actually
+  hit while building this, with the symptom that showed up first.</p>
+  <table>
+    <thead>
+      <tr><th>Symptom</th><th>Cause and fix</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Admin login says <em>Incorrect credentials</em> with the right password</td>
+        <td>An older <code>$</code>-separated password hash sourced unquoted from <code>.env</code>:
+        the shell expands <code>$16384</code> and friends, silently corrupting it. Regenerate with
+        <code>npm run gen-secrets</code> — current hashes are dot-separated and shell-safe. The app
+        now refuses to start on an unparseable hash rather than failing at the login form.</td>
+      </tr>
+      <tr>
+        <td><code>406 Not Acceptable</code> from <code>/mcp</code></td>
+        <td>The <code>accept</code> header must list both <code>application/json</code> and
+        <code>text/event-stream</code>.</td>
+      </tr>
+      <tr>
+        <td>Startup fails on a missing variable although <code>.env</code> has it</td>
+        <td><code>npm start</code> does not load <code>.env</code>. Use
+        <code>set -a &amp;&amp; . ./.env &amp;&amp; set +a</code>, or run via
+        <code>docker compose</code>.</td>
+      </tr>
+      <tr>
+        <td>Subdomain URLs 404, or point at the wrong port</td>
+        <td><code>A2W_SITES_BASE_DOMAIN</code> must be a bare hostname with no port and no leading
+        dot — <code>sites.localhost</code>, not <code>sites.localhost:8080</code>.</td>
+      </tr>
+      <tr>
+        <td>A code change appears to do nothing</td>
+        <td><code>npm start</code> runs the compiled output in <code>build/</code>. Rerun
+        <code>npm run build</code> and read its output — a failed build leaves the previous
+        version running and looks exactly like a change that had no effect.</td>
+      </tr>
+      <tr>
+        <td>Port 8080 already in use</td>
+        <td>An earlier run is still alive: <code>pkill -f "build/src/index.js"</code>, or set
+        <code>A2W_PORT</code> and <code>A2W_PUBLIC_URL</code> to another port together.</td>
+      </tr>
+      <tr>
+        <td>Starting over</td>
+        <td>Stop the server and <code>rm -rf ./data</code>. The schema is recreated on the next
+        boot; published sites and OAuth clients are gone.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<footer>
+  <span>agent2web · docs/local-testing.html</span>
+  <span>Hover dotted terms for definitions</span>
+</footer>
+
+</div>
+</body>
+</html>

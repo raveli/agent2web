@@ -46,6 +46,8 @@ open http://localhost:8080/s/hello/
 `text/event-stream`; this server always answers with JSON, but it will return 406
 if the `accept` header omits either.)
 
+For a step-by-step local walkthrough — including subdomain hosting, the password gate and a
+troubleshooting table — open [docs/local-testing.html](docs/local-testing.html) in a browser.
 For Kubernetes, see [deploy/README.md](deploy/README.md).
 
 ## Connecting Claude

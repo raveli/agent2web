@@ -30,6 +30,11 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
 }
 
+/** "1 file" / "2 files" — count plus its correctly pluralised noun. */
+export function plural(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 export function formatDate(epochMs: number): string {
   return new Date(epochMs).toISOString().replace('T', ' ').slice(0, 16) + 'Z';
 }

@@ -3,7 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Config } from '../config.js';
 import type { InputFile, SiteStore, Visibility } from '../storage.js';
 import { UserError } from '../util/errors.js';
-import { formatBytes } from '../util/html.js';
+import { formatBytes, plural } from '../util/html.js';
 import { siteUrls } from '../urls.js';
 import {
   fail,
@@ -107,9 +107,10 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
           .join('\n');
         return ok(
           args.response_format as ResponseFormat,
-          `${result.created ? 'Published' : 'Updated'} **${result.site.slug}** (${
-            result.version.file_count
-          } files, ${formatBytes(result.version.bytes)})\n\n${urls.primary}\n${extra}`.trim(),
+          `${result.created ? 'Published' : 'Updated'} **${result.site.slug}** (${plural(
+            result.version.file_count,
+            'file',
+          )}, ${formatBytes(result.version.bytes)})\n\n${urls.primary}\n${extra}`.trim(),
           structured,
         );
       } catch (err) {
@@ -149,9 +150,10 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
         );
         return ok(
           args.response_format as ResponseFormat,
-          `Updated **${result.site.slug}** — version \`${result.version.id}\` now has ${
-            result.version.file_count
-          } files (${formatBytes(result.version.bytes)}).\n\n${siteUrls(config, result.site).primary}`,
+          `Updated **${result.site.slug}** — version \`${result.version.id}\` now has ${plural(
+            result.version.file_count,
+            'file',
+          )} (${formatBytes(result.version.bytes)}).\n\n${siteUrls(config, result.site).primary}`,
           { ...siteSummary(config, result.site), version: versionSummary(result.version) },
         );
       } catch (err) {
@@ -433,7 +435,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
         const { site, version } = store.rollback(args.slug, args.version_id);
         return ok(
           args.response_format as ResponseFormat,
-          `**${site.slug}** rolled back to \`${version.id}\` (${version.file_count} files).\n\n${
+          `**${site.slug}** rolled back to \`${version.id}\` (${plural(version.file_count, 'file')}).\n\n${
             siteUrls(config, site).primary
           }`,
           { ...siteSummary(config, site), version: versionSummary(version) },
