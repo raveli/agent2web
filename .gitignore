@@ -7,3 +7,7 @@ data/
 .env
 .env.local
 .DS_Store
+
+# wrangler dev state and local secrets
+.wrangler/
+.dev.vars

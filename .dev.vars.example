@@ -1,0 +1,15 @@
+# Secrets for `wrangler dev`. Copy to .dev.vars (gitignored) and fill in from
+# `npm run gen-secrets`. The Deploy to Cloudflare flow prompts for these same
+# names, so keep the list in step with wrangler.jsonc.
+
+# Signs cookies and hashes tokens at rest. 32+ characters.
+A2W_SECRET=
+
+# Owner credential. Prefer the hash; A2W_ADMIN_PASSWORD works but warns at boot.
+A2W_ADMIN_PASSWORD_HASH=
+
+# Optional static bearer token for the MCP endpoint, for Claude Code / curl / CI.
+A2W_API_TOKEN=
+
+# Optional base32 TOTP secret, to require a 6-digit code at sign-in.
+# A2W_ADMIN_TOTP_SECRET=

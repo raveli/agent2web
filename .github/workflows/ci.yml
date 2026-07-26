@@ -16,31 +16,20 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npm run build
-      - run: node --test build/test/*.test.js
+      # Boots the real Worker bundle in Miniflare with local D1 and R2 and talks
+      # to it over HTTP — the same code path that deploys.
+      - run: npm test
 
-  docker:
+  deployable:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - name: Build image (no push)
-        uses: docker/build-push-action@v6
+      - uses: actions/setup-node@v4
         with:
-          context: .
-          push: false
-          load: true
-          tags: agent2web:ci
-      - name: Boot the image and check /healthz
-        run: |
-          docker run -d --name a2w -p 8080:8080 \
-            -e A2W_PUBLIC_URL=http://127.0.0.1:8080 \
-            -e A2W_SECRET=ci-secret-that-is-long-enough-0123456789 \
-            -e A2W_ADMIN_PASSWORD=ci-admin-password \
-            agent2web:ci
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8080/healthz; then ok=1; break; fi
-            sleep 1
-          done
-          docker logs a2w
-          test -n "$ok"
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # Catches a broken wrangler.jsonc or an unresolvable binding, with no
+      # credentials needed.
+      - run: npx wrangler deploy --dry-run

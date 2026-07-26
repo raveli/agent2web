@@ -153,17 +153,20 @@ footer {
 <header class="top">
   <div class="masthead">
     <span><strong>agent2web</strong> · Runbook</span>
-    <span>Local testing · macOS · Node 22</span>
+    <span>Local testing · Cloudflare Workers · Node 22</span>
   </div>
   <h1>Running it <span class="it">on your laptop.</span></h1>
   <p class="lede">
-    Everything except the Claude web connector can be exercised locally, including subdomain
-    hosting and the full <abbr title="Model Context Protocol — the protocol Claude uses to call external tools">MCP</abbr>
-    publish flow. Eight steps, about five minutes.
+    The test suite and <code>wrangler dev</code> both run the real Worker locally, with local D1
+    and R2 — no Cloudflare account needed until you deploy. Everything except the Claude web
+    connector can be exercised this way, including the full
+    <abbr title="Model Context Protocol — the protocol Claude uses to call external tools">MCP</abbr>
+    publish flow. Six steps, about five minutes.
   </p>
   <p class="prereq">
-    <b>You need:</b> Node 22 or newer and this repository. Nothing else — no database, no Docker,
-    no DNS entries. Data lands in <code>./data</code>, which is gitignored.
+    <b>You need:</b> Node 22 or newer and this repository. Nothing else — no Cloudflare
+    account, no Docker, no DNS. Local D1 and R2 state lands in <code>.wrangler/</code>,
+    which is gitignored.
   </p>
 </header>
 
@@ -173,8 +176,9 @@ footer {
   <div class="step-num">01</div>
   <div>
     <h2>Install and run the test suite</h2>
-    <p>The suite boots a real server on an ephemeral port for most of its cases, so a clean pass
-    also proves your machine can run the app.</p>
+    <p>The suite bundles the Worker exactly as <code>wrangler</code> does for deploy, boots it in
+    Miniflare with local D1 and R2 bindings, and talks to it over HTTP. A clean pass means the
+    deployed code path works, not merely that some in-process stand-in does.</p>
     <div class="cmd">npm install
 npm test</div>
     <span class="out-label">Expect</span>
@@ -187,25 +191,17 @@ npm test</div>
 <div class="step">
   <div class="step-num">02</div>
   <div>
-    <h2>Generate secrets and write <code>.env</code></h2>
-    <p>Print a set of credentials and paste them into <code>.env</code>. Save the admin password
-    it shows — it is not stored anywhere else.</p>
-    <div class="cmd">npm run gen-secrets</div>
-    <p>Then create <code>.env</code> with those values plus the local settings:</p>
-    <div class="out">A2W_PUBLIC_URL=http://localhost:8080
-A2W_SECRET=&lt;generated&gt;
-A2W_ADMIN_PASSWORD_HASH=&lt;generated&gt;
-A2W_API_TOKEN=&lt;generated&gt;
-
-A2W_DATA_DIR=./data
-A2W_PORT=8080
-A2W_TRUST_PROXY=false
-A2W_SITES_BASE_DOMAIN=sites.localhost</div>
+    <h2>Generate secrets for local dev</h2>
+    <p>Save the admin password it prints — it is stored nowhere else.</p>
+    <div class="cmd">npm run gen-secrets
+cp .dev.vars.example .dev.vars     <span class="c"># then paste the values in</span></div>
+    <p><code>.dev.vars</code> is what <code>wrangler dev</code> reads for secrets, and it is
+    gitignored. The same variable names are what the Deploy to Cloudflare flow prompts for, so
+    the two stay in step.</p>
     <div class="callout good">
-      <span class="label">Why sites.localhost</span>
-      macOS resolves any <code>*.localhost</code> name to 127.0.0.1, so subdomain hosting works
-      with no DNS setup. Leave the port off this value — it is a hostname, and the app appends its
-      own port when it builds URLs.
+      <span class="label">No account needed yet</span>
+      Everything up to step 06 runs entirely on your machine. D1 and R2 are emulated locally and
+      their state lives in <code>.wrangler/</code>; delete that directory to start clean.
     </div>
   </div>
 </div>
@@ -213,18 +209,13 @@ A2W_SITES_BASE_DOMAIN=sites.localhost</div>
 <div class="step">
   <div class="step-num">03</div>
   <div>
-    <h2>Start the server</h2>
-    <p><code>npm start</code> does not read <code>.env</code> by itself, so export it first.
-    (<code>docker compose up</code> loads the file directly if you prefer that.)</p>
-    <div class="cmd">set -a && . ./.env && set +a && npm start</div>
+    <h2>Run the Worker</h2>
+    <div class="cmd">npm run dev</div>
     <span class="out-label">Expect</span>
-    <div class="out">[agent2web] listening on 0.0.0.0:8080
-[agent2web] public URL   http://localhost:8080
-[agent2web] MCP endpoint http://localhost:8080/mcp
-[agent2web] sites at     http://localhost:8080/s/&lt;slug&gt;/ and http://&lt;slug&gt;.sites.localhost:8080/</div>
-    <p>Bad configuration stops the process here with the reason, rather than half-starting.
-    In another terminal:</p>
-    <div class="cmd">curl -s localhost:8080/healthz</div>
+    <div class="out">[wrangler:info] Ready on http://localhost:8787</div>
+    <p>Bad configuration stops the Worker with the reason rather than half-starting. In another
+    terminal:</p>
+    <div class="cmd">curl -s localhost:8787/healthz</div>
     <div class="out">{"status":"ok","sites":0,"version":"0.1.0"}</div>
   </div>
 </div>
@@ -234,19 +225,26 @@ A2W_SITES_BASE_DOMAIN=sites.localhost</div>
   <div>
     <h2>Publish a page</h2>
     <p>This is the same call Claude makes. Export <code>A2W_API_TOKEN</code> from your
-    <code>.env</code> first.</p>
-    <div class="cmd">curl -s localhost:8080/mcp \
+    <code>.dev.vars</code> first.</p>
+    <div class="cmd">curl -s localhost:8787/mcp \
   -H "authorization: Bearer $A2W_API_TOKEN" \
   -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{
         "name":"site_publish",
-        "arguments":{"slug":"hello","html":"&lt;h1&gt;Hello from agent2web&lt;/h1&gt;"}}}'</div>
+        "arguments":{"slug":"hello","html":"&lt;h1&gt;Hello from a Worker&lt;/h1&gt;"}}}'</div>
     <span class="out-label">Expect (inside the JSON-RPC result)</span>
-    <div class="out">Published **hello** (1 file, 29 B)
+    <div class="out">Published **hello** (1 file, 28 B)
 
-http://hello.sites.localhost:8080/
-Also at: http://localhost:8080/s/hello/</div>
+http://localhost:8787/s/hello/</div>
+    <p>Then <code>curl -i localhost:8787/s/hello/</code>. Note two headers: an
+    <code>ETag</code> straight from R2, so conditional requests work, and a sandbox
+    <abbr title="Content Security Policy — the header that constrains what a page may do">CSP</abbr>,
+    because the page is served from the Worker's own origin.</p>
+    <div class="out">HTTP/1.1 200 OK
+Cache-Control: no-cache
+ETag: "1c4bdd12f43f962ac767f711fa5ac6e5"
+Content-Security-Policy: sandbox allow-scripts allow-forms allow-popups …</div>
     <div class="callout">
       <span class="label">Gotcha</span>
       The <code>accept</code> header must list <em>both</em> <code>application/json</code> and
@@ -259,24 +257,8 @@ Also at: http://localhost:8080/s/hello/</div>
 <div class="step">
   <div class="step-num">05</div>
   <div>
-    <h2>Compare the two URL forms</h2>
-    <p>Both addresses serve the same site at the same time. The difference is worth seeing,
-    because it decides how you deploy.</p>
-    <div class="cmd">open http://localhost:8080/s/hello/          <span class="c"># path-based</span>
-open http://hello.sites.localhost:8080/     <span class="c"># subdomain</span></div>
-    <p>Publish a page that loads <code>/style.css</code> and the subdomain version resolves it;
-    the path version returns 404, because the site is not at the origin root. Pages served from
-    the app's own origin also get a sandbox <abbr title="Content Security Policy — the header that constrains what a page may do">CSP</abbr>
-    that gives them an opaque origin, so they cannot reach your admin session. On their own
-    subdomain they do not.</p>
-  </div>
-</div>
-
-<div class="step">
-  <div class="step-num">06</div>
-  <div>
-    <h2>Password-protect it</h2>
-    <div class="cmd">curl -s localhost:8080/mcp \
+    <h2>Password-protect it, and open the admin UI</h2>
+    <div class="cmd">curl -s localhost:8787/mcp \
   -H "authorization: Bearer $A2W_API_TOKEN" \
   -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
@@ -284,42 +266,34 @@ open http://hello.sites.localhost:8080/     <span class="c"># subdomain</span></
         "name":"site_set_access",
         "arguments":{"slug":"hello","visibility":"password","password":"open-sesame"}}}'
 
-curl -s -o /dev/null -w "%{http_code}\n" localhost:8080/s/hello/
-curl -s -o /dev/null -w "%{http_code}\n" -u :open-sesame localhost:8080/s/hello/</div>
+curl -s -o /dev/null -w "%{http_code}\n" localhost:8787/s/hello/
+curl -s -o /dev/null -w "%{http_code}\n" -u :open-sesame localhost:8787/s/hello/</div>
     <span class="out-label">Expect</span>
     <div class="out">401   ← the unlock form
 200   ← HTTP Basic works, for scripts</div>
-    <p>In a browser you get a form instead. Changing the password later invalidates every
-    unlock cookie already issued.</p>
+    <p>Basic auth is throttled on the same counter as the form, because it issues no cookie and so
+    pays the full key derivation on every request. Then sign in at
+    <a href="http://localhost:8787/admin">localhost:8787/admin</a> with the admin password from
+    step 02.</p>
   </div>
 </div>
 
 <div class="step">
-  <div class="step-num">07</div>
-  <div>
-    <h2>Open the admin UI</h2>
-    <p>Sign in at <a href="http://localhost:8080/admin">localhost:8080/admin</a> with the admin
-    password from step 02. The list shows what is published and who can reach it; selecting a site
-    opens its own page for access, custom domain, versions, files and deletion.</p>
-  </div>
-</div>
-
-<div class="step">
-  <div class="step-num">08</div>
+  <div class="step-num">06</div>
   <div>
     <h2>Connect a real client</h2>
-    <p>Both credentials work locally. The static token skips the browser entirely; the
+    <p>Both credentials work locally. The static token skips the browser; the
     <abbr title="OAuth 2.1 — the authorization flow Claude's connectors require">OAuth</abbr>
     flow uses a loopback callback, which the redirect policy allows on any port.</p>
-    <div class="cmd">npx @modelcontextprotocol/inspector       <span class="c"># then point it at http://localhost:8080/mcp</span>
+    <div class="cmd">npx @modelcontextprotocol/inspector       <span class="c"># point it at http://localhost:8787/mcp</span>
 
-claude mcp add --transport http a2w-local http://localhost:8080/mcp \
+claude mcp add --transport http a2w-local http://localhost:8787/mcp \
   --header "Authorization: Bearer $A2W_API_TOKEN"</div>
     <div class="callout">
       <span class="label">Not testable locally</span>
       Claude web custom connectors need a public HTTPS URL with a certificate a browser trusts, so
-      that flow cannot run against localhost. To try it before deploying, expose the port with
-      <code>cloudflared tunnel --url http://localhost:8080</code> and set
+      that flow cannot run against localhost. Deploy, or expose the port with
+      <code>cloudflared tunnel --url http://localhost:8787</code> and set
       <code>A2W_PUBLIC_URL</code> to the tunnel hostname — it must match exactly, since it is the
       OAuth issuer and the audience of every token issued.
     </div>
@@ -338,11 +312,10 @@ claude mcp add --transport http a2w-local http://localhost:8080/mcp \
     </thead>
     <tbody>
       <tr>
-        <td>Admin login says <em>Incorrect credentials</em> with the right password</td>
-        <td>An older <code>$</code>-separated password hash sourced unquoted from <code>.env</code>:
-        the shell expands <code>$16384</code> and friends, silently corrupting it. Regenerate with
-        <code>npm run gen-secrets</code> — current hashes are dot-separated and shell-safe. The app
-        now refuses to start on an unparseable hash rather than failing at the login form.</td>
+        <td>Worker returns 500 with a configuration message</td>
+        <td>Deliberate: bad config stops startup rather than half-working. The body names the
+        variable. A <code>scrypt.</code> password hash from the old self-hosted build lands here —
+        Cloudflare has no scrypt, so regenerate with <code>npm run gen-secrets</code>.</td>
       </tr>
       <tr>
         <td><code>406 Not Acceptable</code> from <code>/mcp</code></td>
@@ -350,31 +323,36 @@ claude mcp add --transport http a2w-local http://localhost:8080/mcp \
         <code>text/event-stream</code>.</td>
       </tr>
       <tr>
-        <td>Startup fails on a missing variable although <code>.env</code> has it</td>
-        <td><code>npm start</code> does not load <code>.env</code>. Use
-        <code>set -a &amp;&amp; . ./.env &amp;&amp; set +a</code>, or run via
-        <code>docker compose</code>.</td>
+        <td>Admin login says <em>Incorrect credentials</em> with the right password</td>
+        <td>Check <code>.dev.vars</code> is present and that the hash is intact. Hashes are
+        dot-separated precisely so an unquoted <code>$</code> cannot be eaten by a shell.</td>
       </tr>
       <tr>
-        <td>Subdomain URLs 404, or point at the wrong port</td>
-        <td><code>A2W_SITES_BASE_DOMAIN</code> must be a bare hostname with no port and no leading
-        dot — <code>sites.localhost</code>, not <code>sites.localhost:8080</code>.</td>
+        <td>Subdomain URLs 404</td>
+        <td><code>A2W_SITES_BASE_DOMAIN</code> must be a bare hostname, no port and no leading dot.
+        On <code>workers.dev</code> wildcards do not exist at all, so only path URLs work there.</td>
       </tr>
       <tr>
         <td>A code change appears to do nothing</td>
-        <td><code>npm start</code> runs the compiled output in <code>build/</code>. Rerun
-        <code>npm run build</code> and read its output — a failed build leaves the previous
-        version running and looks exactly like a change that had no effect.</td>
+        <td><code>npm test</code> and <code>npm run dev</code> both build first, but read the build
+        output — a failed <code>tsc</code> leaves the previous bundle in place and looks exactly like
+        a change that had no effect.</td>
       </tr>
       <tr>
-        <td>Port 8080 already in use</td>
-        <td>An earlier run is still alive: <code>pkill -f "build/src/index.js"</code>, or set
-        <code>A2W_PORT</code> and <code>A2W_PUBLIC_URL</code> to another port together.</td>
+        <td>Port 8787 already in use</td>
+        <td>An earlier session is still alive: <code>pkill -f wrangler</code>, or pass
+        <code>--port</code>. If you change the port, change <code>A2W_PUBLIC_URL</code> with it.</td>
       </tr>
       <tr>
         <td>Starting over</td>
-        <td>Stop the server and <code>rm -rf ./data</code>. The schema is recreated on the next
-        boot; published sites and OAuth clients are gone.</td>
+        <td><code>rm -rf .wrangler</code>. Local D1 and R2 state is recreated on the next boot;
+        published sites and OAuth clients are gone.</td>
+      </tr>
+      <tr>
+        <td>Login is slow, or CPU cost looks high</td>
+        <td>Expected. PBKDF2 at 600,000 iterations is ~130 ms by design, which is why the Workers
+        Paid plan is required — the Free plan caps a request at 10 ms of CPU. It is paid once per
+        session, not per request.</td>
       </tr>
     </tbody>
   </table>
