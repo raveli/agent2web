@@ -6,7 +6,14 @@ const ESCAPES: Record<string, string> = {
   "'": '&#39;',
 };
 
-/** Escapes a value for interpolation into HTML text or a quoted attribute. */
+/**
+ * Escapes a value for interpolation into HTML text or a quoted attribute value.
+ *
+ * NOT sufficient for JavaScript contexts such as an `onclick` attribute or a
+ * `<script>` body: the HTML parser decodes entities before the JS parser sees
+ * them, so `&#39;` turns back into an apostrophe and closes a string literal.
+ * Pass values to JS through a `data-` attribute and read them via `dataset`.
+ */
 export function esc(value: unknown): string {
   return String(value ?? '').replace(/[&<>"']/g, ch => ESCAPES[ch]!);
 }

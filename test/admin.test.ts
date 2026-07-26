@@ -146,6 +146,33 @@ test('the connections page lists registered OAuth clients and can revoke them', 
   assert.doesNotMatch(after, /Revocable Client/);
 });
 
+test('a client name cannot inject script into the connections page', async () => {
+  // Registration is unauthenticated by design, so client_name is attacker input.
+  // It reaches a confirm() dialog; an HTML escaper alone would not hold there,
+  // because entities are decoded before the JS parser runs.
+  const payload = `'+(window.__pwned=1)+'`;
+  await fetch(`${h.baseUrl}/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      client_name: payload,
+      token_endpoint_auth_method: 'none',
+      redirect_uris: ['http://127.0.0.1:9997/cb'],
+    }),
+  });
+
+  const body = await (await get('/admin/connections')).text();
+  assert.ok(body.includes('&#39;+(window.__pwned=1)+&#39;'), 'the name should appear escaped');
+
+  // Every inline handler must be a constant that reads its message from data-*.
+  // \s so this matches attribute names, not the "on" inside e.g. content="…".
+  const handlers = [...body.matchAll(/\son\w+="([^"]*)"/g)].map(m => m[1]!);
+  assert.ok(handlers.length > 0, 'expected at least one inline handler to check');
+  for (const handler of handlers) {
+    assert.equal(handler, 'return confirm(this.dataset.confirm)', `unexpected handler: ${handler}`);
+  }
+});
+
 test('signing out invalidates the session', async () => {
   const page = await get('/admin');
   const pageCsrf = /name="csrf" value="([^"]+)"/.exec(await page.text())![1]!;

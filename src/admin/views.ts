@@ -256,7 +256,9 @@ export function siteDetailPage(
   <p class="help">Removes ${slug}, every version and all of its files from disk. The addresses above start
   returning 404. This cannot be undone.</p>
   <form method="post" action="/admin/sites/${slug}/delete"
-        onsubmit="return confirm('Delete ${slug} and all ${versions.length} version(s)? This cannot be undone.')">
+        ${confirmAttrs(
+          `Delete ${site.slug} and its ${versions.length} version${versions.length === 1 ? '' : 's'}? This cannot be undone.`,
+        )}>
     ${hidden(csrf)}
     <button type="submit" class="danger">Delete ${slug}</button>
   </form>
@@ -294,7 +296,7 @@ export function connectionsPage(
   }</td>
   <td class="small muted">${entry.lastIssuedAt ? esc(formatDate(entry.lastIssuedAt)) : 'never'}</td>
   <td class="num"><form method="post" action="/admin/connections/${esc(entry.client.client_id)}/revoke"
-        onsubmit="return confirm('Revoke ${esc(entry.name)}? It will have to be authorized again.')">
+        ${confirmAttrs(`Revoke ${entry.name}? It will have to be authorized again.`)}>
       ${hidden(csrf)}<button type="submit" class="danger">Revoke</button></form></td>
 </tr>`,
     )
@@ -344,6 +346,21 @@ function accessHint(visibility: 'public' | 'password' | 'disabled'): string {
     case 'disabled':
       return 'Returns 404 to visitors. Files and versions are kept.';
   }
+}
+
+/**
+ * Attributes that make a form ask for confirmation first.
+ *
+ * The message travels in a data attribute rather than inside the handler,
+ * because `esc()` is an HTML escaper and this would otherwise be a JavaScript
+ * string context. The HTML parser decodes entities *before* the JS parser runs,
+ * so an escaped apostrophe becomes a real one and closes the literal — a client
+ * registering itself as `'+(...)+'` would get arbitrary script running on this
+ * page. In a data attribute the escaping is correct and `dataset` hands the JS
+ * the raw string, so the handler below stays a constant.
+ */
+function confirmAttrs(message: string): string {
+  return `data-confirm="${esc(message)}" onsubmit="return confirm(this.dataset.confirm)"`;
 }
 
 function hidden(csrf: string): string {
