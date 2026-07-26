@@ -1,20 +1,22 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { loadConfig } from '../src/config.js';
-import { hashPassword } from '../src/auth/passwords.js';
-import { isAllowedRedirectUri } from '../src/auth/redirectPolicy.js';
+import { loadConfig } from '../src/core/config.js';
+import { WebCryptoProvider } from '../src/core/crypto.js';
+import { isAllowedRedirectUri } from '../src/core/redirectPolicy.js';
 
 /**
  * Exercised against a production-shaped config: the integration tests run on
  * http://127.0.0.1, where the loopback rule allows everything by design.
  */
-const config = loadConfig(
+const crypto = new WebCryptoProvider();
+const config = await loadConfig(
   {
     A2W_PUBLIC_URL: 'https://a2w.example.com',
     A2W_SECRET: 'x'.repeat(40),
-    A2W_ADMIN_PASSWORD_HASH: hashPassword('a-good-admin-password'),
+    A2W_ADMIN_PASSWORD: 'a-good-admin-password',
     A2W_EXTRA_REDIRECT_URIS: 'https://tools.example.org/oauth/callback',
-  } as NodeJS.ProcessEnv,
+  },
+  crypto,
 );
 
 test('Claude hosted callbacks and loopback URIs are allowed', () => {

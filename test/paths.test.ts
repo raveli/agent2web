@@ -1,7 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { join } from 'node:path';
-import { decodeRequestPath, normalizeSitePath, safeJoin } from '../src/storage.js';
+import { blobKey, candidatesFor, decodeRequestPath, normalizeSitePath } from '../src/core/paths.js';
 import { isValidSlug, slugify } from '../src/util/ids.js';
 
 test('normalizeSitePath accepts ordinary relative paths', () => {
@@ -35,10 +34,21 @@ test('normalizeSitePath rejects traversal and other unsafe input', () => {
   }
 });
 
-test('safeJoin refuses to leave the root', () => {
-  const root = join('/tmp', 'a2w-root');
-  assert.equal(safeJoin(root, 'index.html'), join(root, 'index.html'));
-  assert.throws(() => safeJoin(root, '../outside.html'), /escapes/);
+test('blob keys are confined to their site and version', () => {
+  assert.equal(blobKey('site1', 'ver1', 'index.html'), 'sites/site1/ver1/index.html');
+  assert.equal(blobKey('site1', 'ver1', '/assets/app.css'), 'sites/site1/ver1/assets/app.css');
+  // A key can only be built through the same validation writes go through.
+  assert.throws(() => blobKey('site1', 'ver1', '../../other/index.html'), /\.\./);
+  assert.throws(() => blobKey('site1', 'ver1', '/'), /name a file/);
+});
+
+test('candidate resolution prefers exact paths, then index, then .html', () => {
+  assert.deepEqual(candidatesFor('/'), ['index.html']);
+  assert.deepEqual(candidatesFor('/about'), ['about', 'about/index.html', 'about.html']);
+  assert.deepEqual(candidatesFor('/docs/'), ['docs/index.html']);
+  // Nothing that fails validation can become a candidate.
+  assert.deepEqual(candidatesFor('/%2e%2e/etc'), []);
+  assert.deepEqual(candidatesFor('/a\\b'), []);
 });
 
 test('decodeRequestPath blocks encoded traversal', () => {

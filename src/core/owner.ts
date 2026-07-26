@@ -1,5 +1,5 @@
 import type { Config } from './config.js';
-import type { CryptoPort } from '../ports/crypto.js';
+import type { WebCryptoProvider } from '../core/crypto.js';
 import type { Throttle } from './throttle.js';
 import { verifyTotp } from './totp.js';
 
@@ -12,7 +12,7 @@ export type OwnerLoginOutcome = { ok: true } | { ok: false; error: string; statu
  */
 export async function verifyOwner(
   config: Config,
-  crypto: CryptoPort,
+  crypto: WebCryptoProvider,
   throttle: Throttle,
   ip: string,
   password: unknown,

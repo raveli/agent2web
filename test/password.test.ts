@@ -142,3 +142,36 @@ test('enabling password protection without ever setting a password is refused', 
 async function siteId(): Promise<string> {
   return (await h.db.first<{ id: string }>('SELECT id FROM sites WHERE slug = ?', 'secret'))!.id;
 }
+
+test('Basic auth is throttled, so it cannot brute force past the form limiter', async () => {
+  // An earlier test disables this site, so re-arm it rather than depending on
+  // whatever the previous test left behind.
+  await callTool(h.baseUrl, API_TOKEN, 'site_set_access', {
+    slug: 'secret',
+    visibility: 'password',
+    password: 'a-brand-new-password',
+  });
+
+  // Basic auth issues no cookie, so each attempt pays the full key derivation.
+  // Left unthrottled it would be both a brute-force channel and a way to burn
+  // the Workers CPU allowance.
+  const attempt = (password: string) =>
+    fetch(`${h.baseUrl}/s/secret/`, {
+      headers: { authorization: `Basic ${Buffer.from(`:${password}`).toString('base64')}` },
+    });
+
+  let throttled = false;
+  for (let i = 0; i < 14; i++) {
+    const res = await attempt(`wrong-${i}`);
+    if (res.status === 429) {
+      throttled = true;
+      assert.ok(Number(res.headers.get('retry-after')) > 0, 'expected Retry-After');
+      break;
+    }
+    assert.equal(res.status, 401);
+  }
+  assert.ok(throttled, 'expected Basic auth attempts to be throttled');
+
+  // While throttled, even the correct password is refused rather than hashed.
+  assert.equal((await attempt('a-brand-new-password')).status, 429);
+});

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import type { Config } from '../core/config.js';
-import type { CryptoPort } from '../ports/crypto.js';
+import type { WebCryptoProvider } from '../core/crypto.js';
 import type { AdminSessionRow } from '../core/session.js';
 import { Sql } from '../d1.js';
 import { SiteStore } from '../store.js';
@@ -24,7 +24,7 @@ export type Bindings = {
 
 export type Variables = {
   config: Config;
-  crypto: CryptoPort;
+  crypto: WebCryptoProvider;
   sql: Sql;
   store: SiteStore;
   oauth: OAuthServer;
@@ -36,7 +36,7 @@ export type Env = { Bindings: Bindings; Variables: Variables };
 
 export type AppDeps = {
   config: Config;
-  crypto: CryptoPort;
+  crypto: WebCryptoProvider;
   db: D1Database;
   blobs: R2Bucket;
 };

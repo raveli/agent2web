@@ -1,19 +1,10 @@
 import { z } from 'zod';
-import type { CryptoPort } from '../ports/crypto.js';
+import type { WebCryptoProvider } from '../core/crypto.js';
 
 /**
- * All configuration comes from the environment so the same image can run under
- * docker compose, plain docker or Kubernetes without a config file.
+ * Configuration comes from Worker vars and secrets, so the same code deploys to
+ * any account without a config file.
  */
-
-const bool = (dflt: boolean) =>
-  z
-    .string()
-    .optional()
-    .transform(v => {
-      if (v === undefined || v.trim() === '') return dflt;
-      return ['1', 'true', 'yes', 'on'].includes(v.trim().toLowerCase());
-    });
 
 const int = (dflt: number, min: number, max: number) =>
   z
@@ -55,16 +46,6 @@ const schema = z.object({
       message: 'must look like /s (lowercase letters, digits and dashes)',
     }),
   A2W_SITE_SANDBOX: z.enum(['auto', 'always', 'never']).optional().default('auto'),
-  A2W_DATA_DIR: z
-    .string()
-    .optional()
-    .transform(v => (v === undefined || v.trim() === '' ? '/data' : v.trim())),
-  A2W_PORT: int(8080, 1, 65535),
-  A2W_BIND: z
-    .string()
-    .optional()
-    .transform(v => (v === undefined || v.trim() === '' ? '0.0.0.0' : v.trim())),
-  A2W_TRUST_PROXY: bool(true),
   A2W_MAX_FILE_BYTES: int(5 * 1024 * 1024, 1024, 256 * 1024 * 1024),
   A2W_MAX_SITE_BYTES: int(50 * 1024 * 1024, 1024, 2 * 1024 * 1024 * 1024),
   A2W_MAX_FILES: int(200, 1, 5000),
@@ -94,10 +75,6 @@ export type Config = {
   sitesBaseDomain?: string;
   sitesPathPrefix: string;
   siteSandbox: 'auto' | 'always' | 'never';
-  dataDir: string;
-  port: number;
-  bind: string;
-  trustProxy: boolean;
   maxFileBytes: number;
   maxSiteBytes: number;
   maxFiles: number;
@@ -116,7 +93,7 @@ export class ConfigError extends Error {}
  */
 export async function loadConfig(
   env: Record<string, string | undefined>,
-  crypto: CryptoPort,
+  crypto: WebCryptoProvider,
 ): Promise<Config> {
   const parsed = schema.safeParse(env);
   if (!parsed.success) {
@@ -192,10 +169,6 @@ export async function loadConfig(
     sitesBaseDomain: v.A2W_SITES_BASE_DOMAIN,
     sitesPathPrefix: v.A2W_SITES_PATH_PREFIX,
     siteSandbox: v.A2W_SITE_SANDBOX,
-    dataDir: v.A2W_DATA_DIR,
-    port: v.A2W_PORT,
-    bind: v.A2W_BIND,
-    trustProxy: v.A2W_TRUST_PROXY,
     maxFileBytes: v.A2W_MAX_FILE_BYTES,
     maxSiteBytes: v.A2W_MAX_SITE_BYTES,
     maxFiles: v.A2W_MAX_FILES,

@@ -1,6 +1,6 @@
 import type { R2Bucket } from '@cloudflare/workers-types';
 import type { Config } from './core/config.js';
-import type { CryptoPort } from './ports/crypto.js';
+import type { WebCryptoProvider } from './core/crypto.js';
 import { Sql, stmt, type Statement } from './d1.js';
 import {
   blobKey,
@@ -71,7 +71,7 @@ export class SiteStore {
     db: ConstructorParameters<typeof Sql>[0],
     private readonly blobs: R2Bucket,
     private readonly config: Config,
-    private readonly crypto: CryptoPort,
+    private readonly crypto: WebCryptoProvider,
   ) {
     this.sql = new Sql(db);
   }

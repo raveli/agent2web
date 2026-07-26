@@ -23,8 +23,15 @@ export async function serveSite(c: Context<Env>, target: SiteTarget): Promise<Re
     return handleAuthEndpoint(c, target, inner);
   }
 
-  if (site.visibility === 'password' && !(await hasAccess(c, site))) {
-    return passwordPrompt(c, target, 401);
+  if (site.visibility === 'password') {
+    const access = await hasAccess(c, site);
+    if (access === 'throttled') {
+      const retryAfter = await c.var.throttles.site.check(`${clientIp(c)}:${site.id}`);
+      return html('Too many attempts. Try again shortly.', 429, {
+        'Retry-After': String(Math.max(1, retryAfter)),
+      });
+    }
+    if (access !== 'ok') return passwordPrompt(c, target, 401);
   }
 
   const resolved = await store.resolveRequest(site, inner);
@@ -55,21 +62,37 @@ export async function serveSite(c: Context<Env>, target: SiteTarget): Promise<Re
 
 // ------------------------------------------------------------------- access
 
-async function hasAccess(c: Context<Env>, site: SiteRow): Promise<boolean> {
-  const { config, crypto } = c.var;
+type AccessOutcome = 'ok' | 'denied' | 'throttled';
+
+async function hasAccess(c: Context<Env>, site: SiteRow): Promise<AccessOutcome> {
+  const { config, crypto, throttles } = c.var;
+
+  // The cookie path is an HMAC — microseconds — which is what makes the key
+  // derivation below a once-per-session cost rather than a per-request one.
   const cookie = getCookie(c, siteCookieName(site.id));
-  if (await siteCookieValid(crypto, config.secret, site, cookie)) return true;
+  if (await siteCookieValid(crypto, config.secret, site, cookie)) return 'ok';
 
   // `curl -u :password` keeps protected sites scriptable.
   const header = c.req.header('authorization');
-  if (!header?.toLowerCase().startsWith('basic ') || !site.password_hash) return false;
+  if (!header?.toLowerCase().startsWith('basic ') || !site.password_hash) return 'denied';
   let decoded: string;
   try {
     decoded = new TextDecoder().decode(fromBase64(header.slice(6).trim()));
   } catch {
-    return false;
+    return 'denied';
   }
-  return crypto.verifyPassword(decoded.slice(decoded.indexOf(':') + 1), site.password_hash);
+
+  // Basic auth issues no cookie, so every request pays the full KDF. Unthrottled
+  // that is both a brute-force channel that bypasses the form's limiter and a way
+  // to burn the CPU allowance, so it is throttled on the same key as the form.
+  const key = `${clientIp(c)}:${site.id}`;
+  if ((await throttles.site.check(key)) > 0) return 'throttled';
+
+  const password = decoded.slice(decoded.indexOf(':') + 1);
+  if (await crypto.verifyPassword(password, site.password_hash)) return 'ok';
+  // Only failures are recorded, so a correct credential never writes to D1.
+  await throttles.site.fail(key);
+  return 'denied';
 }
 
 async function handleAuthEndpoint(

@@ -1,5 +1,5 @@
 import type { Config } from './config.js';
-import type { CryptoPort } from '../ports/crypto.js';
+import type { WebCryptoProvider } from '../core/crypto.js';
 import type { Sql } from '../d1.js';
 import type { SiteRow } from '../store.js';
 import { stringsEqual } from '../util/bytes.js';
@@ -15,12 +15,12 @@ export type AdminSessionRow = {
 };
 
 /** Appends an HMAC to a payload so it can be handed to a browser and trusted back. */
-export async function sign(crypto: CryptoPort, secret: string, payload: string): Promise<string> {
+export async function sign(crypto: WebCryptoProvider, secret: string, payload: string): Promise<string> {
   return `${payload}.${await crypto.hmac(secret, payload)}`;
 }
 
 export async function unsign(
-  crypto: CryptoPort,
+  crypto: WebCryptoProvider,
   secret: string,
   token: string,
 ): Promise<string | undefined> {
@@ -35,14 +35,14 @@ export async function unsign(
  * Fingerprint of the site's current credentials, included in the site cookie so
  * that rotating or clearing the password invalidates cookies already issued.
  */
-function fingerprint(crypto: CryptoPort, secret: string, site: SiteRow): Promise<string> {
+function fingerprint(crypto: WebCryptoProvider, secret: string, site: SiteRow): Promise<string> {
   return crypto
     .hmac(secret, `site:${site.id}:${site.password_hash ?? ''}`)
-    .then(value => value.slice(0, 16));
+    .then((value: string) => value.slice(0, 16));
 }
 
 export async function issueSiteCookie(
-  crypto: CryptoPort,
+  crypto: WebCryptoProvider,
   secret: string,
   site: SiteRow,
   ttlSeconds: number,
@@ -52,7 +52,7 @@ export async function issueSiteCookie(
 }
 
 export async function siteCookieValid(
-  crypto: CryptoPort,
+  crypto: WebCryptoProvider,
   secret: string,
   site: SiteRow,
   cookie: string | undefined,
@@ -70,7 +70,7 @@ export async function siteCookieValid(
 
 export async function createAdminSession(
   sql: Sql,
-  crypto: CryptoPort,
+  crypto: WebCryptoProvider,
   config: Config,
   label: string,
 ): Promise<string> {
@@ -88,7 +88,7 @@ export async function createAdminSession(
 
 export async function getAdminSession(
   sql: Sql,
-  crypto: CryptoPort,
+  crypto: WebCryptoProvider,
   secret: string,
   id: string | undefined,
 ): Promise<AdminSessionRow | undefined> {
@@ -108,7 +108,7 @@ export async function getAdminSession(
 
 export async function destroyAdminSession(
   sql: Sql,
-  crypto: CryptoPort,
+  crypto: WebCryptoProvider,
   secret: string,
   id: string | undefined,
 ): Promise<void> {
@@ -117,12 +117,12 @@ export async function destroyAdminSession(
 }
 
 /** Deterministic per-session CSRF token, so forms need no server-side state. */
-export function csrfToken(crypto: CryptoPort, secret: string, sessionId: string): Promise<string> {
+export function csrfToken(crypto: WebCryptoProvider, secret: string, sessionId: string): Promise<string> {
   return crypto.hmac(secret, `csrf:${sessionId}`);
 }
 
 export async function csrfValid(
-  crypto: CryptoPort,
+  crypto: WebCryptoProvider,
   secret: string,
   sessionId: string,
   submitted: unknown,

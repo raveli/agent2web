@@ -1,4 +1,4 @@
-import type { Db } from '../ports/db.js';
+import type { Sql } from '../d1.js';
 
 /**
  * Fixed-window attempt limiter shared by every credential surface: admin login,
@@ -13,7 +13,7 @@ import type { Db } from '../ports/db.js';
  */
 export class Throttle {
   constructor(
-    private readonly db: Db,
+    private readonly db: Sql,
     private readonly limit: number,
     private readonly windowMs: number,
     /** Distinguishes limiters sharing the table, e.g. 'admin' vs 'site'. */
@@ -57,6 +57,6 @@ export class Throttle {
 }
 
 /** Drops expired windows; called from the periodic purge. */
-export async function purgeAttempts(db: Db, now = Date.now()): Promise<void> {
+export async function purgeAttempts(db: Sql, now = Date.now()): Promise<void> {
   await db.run('DELETE FROM login_attempts WHERE expires_at <= ?', now);
 }

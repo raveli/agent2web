@@ -8,25 +8,20 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs && node scripts/bundle-worker.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/bundle-worker.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "start": "node build/src/index.js",
     "dev": "npm run build && wrangler dev",
     "test": "npm run build && node --test build/test/*.test.js",
-    "gen-secrets": "npm run build --silent && node build/src/cli/secrets.js",
-    "test:worker": "npm run build && node --test build/test/publish.test.js build/test/password.test.js build/test/oauth.test.js build/test/admin.test.js"
+    "gen-secrets": "npm run build --silent && node scripts/secrets.mjs",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "better-sqlite3": "^13.0.1",
-    "express": "^5.2.1",
     "mime": "^4.1.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260726.1",
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/express": "^5.0.0",
     "@types/node": "^22.10.0",
     "esbuild": "^0.28.1",
     "miniflare": "^4.20260722.0",

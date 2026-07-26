@@ -1,4 +1,4 @@
-import type { Db } from '../ports/db.js';
+import type { Sql } from '../d1.js';
 
 /**
  * The schema, as ordered migrations of individual statements.
@@ -110,7 +110,7 @@ export const MIGRATIONS: string[][] = [
 export const SCHEMA_VERSION = MIGRATIONS.length;
 
 /** Applies any migrations this database has not seen yet. */
-export async function migrate(db: Db): Promise<number> {
+export async function migrate(db: Sql): Promise<number> {
   const from = await currentVersion(db);
   if (from >= SCHEMA_VERSION) return from;
 
@@ -128,7 +128,7 @@ export async function migrate(db: Db): Promise<number> {
   return SCHEMA_VERSION;
 }
 
-async function currentVersion(db: Db): Promise<number> {
+async function currentVersion(db: Sql): Promise<number> {
   await db.run(`CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
   const row = await db.first<{ value: string }>(
     `SELECT value FROM schema_meta WHERE key = 'version'`,

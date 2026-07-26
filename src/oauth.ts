@@ -1,5 +1,5 @@
 import type { Config } from './core/config.js';
-import type { CryptoPort } from './ports/crypto.js';
+import type { WebCryptoProvider } from './core/crypto.js';
 import { Sql, stmt } from './d1.js';
 import { isAllowedRedirectUri, redirectPolicyHelp } from './core/redirectPolicy.js';
 import { stringsEqual } from './util/bytes.js';
@@ -81,7 +81,7 @@ export class OAuthServer {
   constructor(
     private readonly sql: Sql,
     private readonly config: Config,
-    private readonly crypto: CryptoPort,
+    private readonly crypto: WebCryptoProvider,
   ) {}
 
   // ------------------------------------------------------------- discovery

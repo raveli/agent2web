@@ -1,4 +1,3 @@
-import type { CryptoPort } from '../ports/crypto.js';
 import { bytesEqual, fromBase64Url, toBase64Url, toHex, utf8 } from '../util/bytes.js';
 
 /**
@@ -19,7 +18,7 @@ const SALT_BYTES = 16;
  * environment variable, and `$` in an unquoted .env line gets expanded by the
  * shell into a corrupted hash that still looks plausible.
  */
-export class WebCryptoProvider implements CryptoPort {
+export class WebCryptoProvider {
   async hashPassword(plaintext: string): Promise<string> {
     const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
     const key = await derive(plaintext, salt, PBKDF2_ITERATIONS);
