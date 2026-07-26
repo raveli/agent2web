@@ -106,11 +106,10 @@ test('a failed action reports the reason on the site page', async () => {
 
 test('rollback and delete work from the admin UI', async () => {
   await callTool(h.baseUrl, API_TOKEN, 'site_publish', { slug: 'admin-demo', html: '<p>demo v2</p>' });
-  const versions = h.db
-    .prepare(
-      'SELECT v.id FROM versions v JOIN sites s ON s.id = v.site_id WHERE s.slug = ? ORDER BY v.created_at ASC',
-    )
-    .all('admin-demo') as { id: string }[];
+  const versions = await h.db.all<{ id: string }>(
+    'SELECT v.id FROM versions v JOIN sites s ON s.id = v.site_id WHERE s.slug = ? ORDER BY v.created_at ASC',
+    'admin-demo',
+  );
   assert.equal(versions.length, 2);
 
   const rolled = await post('/admin/sites/admin-demo/rollback', { csrf, version_id: versions[0]!.id });

@@ -125,19 +125,30 @@ test('multi-file publish serves assets and honours the custom 404 page', async (
   assert.equal(missing.headers.get('x-content-type-options'), 'nosniff');
 });
 
-test('traversal attempts against served sites are refused', async () => {
-  const attempts = [
-    '/s/multi/../hello/index.html',
-    '/s/multi/%2e%2e/hello/index.html',
+test('traversal attempts cannot escape a site', async () => {
+  // Anything the URL parser leaves intact reaches the app as a literal segment
+  // and must be refused rather than resolved.
+  for (const path of [
     '/s/multi/%2e%2e%2fhello/index.html',
     '/s/multi/..%5cindex.html',
     '/s/multi/....//hello/index.html',
     `/s/multi/${'..%2f'.repeat(6)}etc/passwd`,
-  ];
-  for (const path of attempts) {
+  ]) {
     const res = await rawRequest(h.port, path);
     assert.notEqual(res.status, 200, `${path} unexpectedly served content`);
     assert.doesNotMatch(res.body, /Hi there/, `${path} leaked another site's content`);
+  }
+
+  // Dot segments are different. The WHATWG URL parser resolves them before the
+  // app sees the path — and treats %2e as a dot, so the encoded spelling is not a
+  // way around it either. /s/multi/../hello/ is therefore just a request for
+  // /s/hello/: content the client could have asked for directly. What must hold
+  // is that it cannot reach past an access gate or leave the version prefix,
+  // which traversal.test.ts asserts against a password-protected site.
+  for (const path of ['/s/multi/../hello/index.html', '/s/multi/%2e%2e/hello/index.html']) {
+    const res = await rawRequest(h.port, path);
+    assert.equal(res.status, 200, path);
+    assert.match(res.body, /Hi there/, `expected ${path} to resolve to /s/hello/`);
   }
 });
 
@@ -172,7 +183,9 @@ test('publish requires index.html and enforces limits', async () => {
   });
   assert.equal(badPath.result.isError, true);
   assert.match(textOf(badPath.result), /\.\./);
-  assert.equal(existsSync(`${h.config.dataDir}/sites/escape.html`), false);
+  // The rejected site must not have been created at all, not merely have had the
+  // offending file dropped.
+  assert.equal(await h.db.first('SELECT id FROM sites WHERE slug = ?', 'bad-path'), undefined);
 });
 
 test('duplicate slug with if_exists:fail is rejected, otherwise it versions', async () => {
@@ -316,10 +329,9 @@ test('delete requires confirmation and removes files from disk', async () => {
   });
   assert.equal(structured(ok.result).deleted, true);
   assert.equal((await fetch(`${h.baseUrl}/s/final-name/`)).status, 404);
-  assert.equal(
-    h.db.prepare('SELECT COUNT(*) AS n FROM versions WHERE site_id = ?').get(site.slug) !== undefined,
-    true,
-  );
+  // Deleting the site cascades: no version rows survive it.
+  const orphans = await h.db.all('SELECT id FROM versions WHERE site_id NOT IN (SELECT id FROM sites)');
+  assert.equal(orphans.length, 0);
 });
 
 test('unknown slug errors list known slugs', async () => {

@@ -1,65 +1,57 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
-import type { Server } from 'node:http';
-import { createApp, type AppBundle } from '../src/app.js';
-import { loadConfig, type Config } from '../src/config.js';
-import { hashPassword } from '../src/auth/passwords.js';
-import { openDb, type Db } from '../src/db.js';
+import { Miniflare } from 'miniflare';
+import { Sql } from '../src/d1.js';
 
 export const ADMIN_PASSWORD = 'correct-horse-battery';
 export const API_TOKEN = 'test-static-api-token-0123456789abcdef';
 
 export type Harness = {
-  config: Config;
-  db: Db;
-  bundle: AppBundle;
-  server: Server;
+  /** Async SQL over the local D1 binding, for setting up and inspecting state. */
+  db: Sql;
+  mf: Miniflare;
   baseUrl: string;
   port: number;
   close: () => Promise<void>;
 };
 
-/** Boots the whole app on an ephemeral port against a throwaway data directory. */
+/**
+ * Boots the real Worker bundle in Miniflare on an ephemeral port, with local D1
+ * and R2 bindings.
+ *
+ * Miniflare serves over actual HTTP, so the suite talks to the app exactly as a
+ * client would — no in-process shortcuts, and the same code path that ships.
+ */
 export async function startHarness(
   env: Record<string, string | undefined> = {},
 ): Promise<Harness> {
-  const dataDir = mkdtempSync(join(tmpdir(), 'a2w-test-'));
-  // The public URL has to be known before the app is built, so reserve a port first.
-  const actualPort = await freePort();
+  // The public URL must be known before the Worker boots, since it is the OAuth
+  // issuer, so reserve the port first.
+  const port = await freePort();
 
-  const config = loadConfig(
-    {
-      A2W_PUBLIC_URL: `http://127.0.0.1:${actualPort}`,
+  const mf = new Miniflare({
+    scriptPath: 'build/worker.bundle.js',
+    modules: true,
+    compatibilityDate: '2026-07-01',
+    compatibilityFlags: ['nodejs_compat'],
+    d1Databases: ['DB'],
+    r2Buckets: ['BLOBS'],
+    port,
+    bindings: {
+      A2W_PUBLIC_URL: `http://127.0.0.1:${port}`,
       A2W_SECRET: 'test-secret-that-is-long-enough-0123456789',
-      A2W_ADMIN_PASSWORD_HASH: hashPassword(ADMIN_PASSWORD),
+      A2W_ADMIN_PASSWORD: ADMIN_PASSWORD,
       A2W_API_TOKEN: API_TOKEN,
-      A2W_DATA_DIR: dataDir,
-      A2W_TRUST_PROXY: 'false',
-      ...env,
-    } as NodeJS.ProcessEnv,
-  );
-
-  const db = openDb(join(dataDir, 'agent2web.db'));
-  const bundle = createApp(config, db);
-  const server = await new Promise<Server>(resolve => {
-    const s = bundle.app.listen(actualPort, '127.0.0.1', () => resolve(s));
+      ...stripUndefined(env),
+    },
   });
+  await mf.ready;
 
   return {
-    config,
-    db,
-    bundle,
-    server,
-    port: actualPort,
-    baseUrl: `http://127.0.0.1:${actualPort}`,
-    close: async () => {
-      bundle.stop();
-      await new Promise<void>(resolve => server.close(() => resolve()));
-      db.close();
-      rmSync(dataDir, { recursive: true, force: true });
-    },
+    mf,
+    db: new Sql((await mf.getD1Database('DB')) as never),
+    port,
+    baseUrl: `http://127.0.0.1:${port}`,
+    close: () => mf.dispose(),
   };
 }
 
@@ -69,10 +61,16 @@ async function freePort(): Promise<number> {
     const probe = createServer();
     probe.on('error', reject);
     probe.listen(0, '127.0.0.1', () => {
-      const port = (probe.address() as AddressInfo).port;
-      probe.close(() => resolve(port));
+      const p = (probe.address() as AddressInfo).port;
+      probe.close(() => resolve(p));
     });
   });
+}
+
+function stripUndefined(env: Record<string, string | undefined>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env).filter((e): e is [string, string] => e[1] !== undefined),
+  );
 }
 
 /** Calls an MCP tool over the streamable HTTP endpoint with a bearer token. */
@@ -82,25 +80,12 @@ export async function callTool(
   name: string,
   args: Record<string, unknown> = {},
 ): Promise<{ status: number; result?: any; error?: any; headers: Headers }> {
-  const res = await fetch(`${baseUrl}/mcp`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      accept: 'application/json, text/event-stream',
-      authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: { name, arguments: args },
-    }),
-  });
-  if (!res.ok) {
-    return { status: res.status, error: await safeJson(res), headers: res.headers };
-  }
-  const payload = await parseMcpResponse(res);
-  return { status: res.status, result: payload?.result, error: payload?.error, headers: res.headers };
+  return mcpRequest(baseUrl, token, 'tools/call', { name, arguments: args }).then(r => ({
+    status: r.status,
+    result: r.result,
+    error: r.error,
+    headers: r.headers ?? new Headers(),
+  }));
 }
 
 export async function mcpRequest(
@@ -118,15 +103,14 @@ export async function mcpRequest(
     },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
   });
-  if (!res.ok) return { status: res.status, error: await safeJson(res) };
-  return { status: res.status, ...(await parseMcpResponse(res)) };
+  if (!res.ok) return { status: res.status, error: await safeJson(res), headers: res.headers };
+  return { status: res.status, headers: res.headers, ...(await parseMcpResponse(res)) };
 }
 
 /** The transport may answer with JSON or a single SSE event; accept both. */
 async function parseMcpResponse(res: globalThis.Response): Promise<any> {
   const text = await res.text();
-  const contentType = res.headers.get('content-type') ?? '';
-  if (contentType.includes('text/event-stream')) {
+  if ((res.headers.get('content-type') ?? '').includes('text/event-stream')) {
     for (const line of text.split('\n')) {
       if (line.startsWith('data:')) return JSON.parse(line.slice(5).trim());
     }
@@ -176,7 +160,8 @@ export type RawResponse = {
 /**
  * Sends a request with node:http rather than fetch, because fetch refuses to set
  * a custom Host header and normalises `..` out of paths — both of which these
- * tests need to exercise verbatim.
+ * tests need verbatim. Miniflare builds the Worker's request URL from the Host
+ * header, so subdomain routing is exercised for real.
  */
 export async function rawRequest(
   port: number,

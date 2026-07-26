@@ -51,11 +51,11 @@ test('the right password sets a cookie that unlocks the site', async () => {
   const res = await unlock('letmein-please');
   assert.equal(res.status, 303);
   assert.equal(res.headers.get('location'), '/s/secret/');
-  const cookie = cookieValue(res.headers.getSetCookie(), `a2w_site_${siteId()}`);
+  const cookie = cookieValue(res.headers.getSetCookie(), `a2w_site_${await siteId()}`);
   assert.ok(cookie, 'expected a site cookie');
 
   const page = await fetch(`${h.baseUrl}/s/secret/`, {
-    headers: { cookie: `a2w_site_${siteId()}=${encodeURIComponent(cookie!)}` },
+    headers: { cookie: `a2w_site_${await siteId()}=${encodeURIComponent(cookie!)}` },
   });
   assert.equal(page.status, 200);
   assert.match(await page.text(), /the secret content/);
@@ -67,7 +67,7 @@ test('the right password sets a cookie that unlocks the site', async () => {
 
 test('a forged cookie does not unlock the site', async () => {
   const page = await fetch(`${h.baseUrl}/s/secret/`, {
-    headers: { cookie: `a2w_site_${siteId()}=99999999999.deadbeefdeadbeef.forgedsignature` },
+    headers: { cookie: `a2w_site_${await siteId()}=99999999999.deadbeefdeadbeef.forgedsignature` },
   });
   assert.equal(page.status, 401);
 });
@@ -86,7 +86,7 @@ test('HTTP Basic auth works for scripted access', async () => {
 
 test('rotating the password invalidates cookies issued for the old one', async () => {
   const unlocked = await unlock('letmein-please');
-  const cookie = cookieValue(unlocked.headers.getSetCookie(), `a2w_site_${siteId()}`)!;
+  const cookie = cookieValue(unlocked.headers.getSetCookie(), `a2w_site_${await siteId()}`)!;
 
   await callTool(h.baseUrl, API_TOKEN, 'site_set_access', {
     slug: 'secret',
@@ -95,7 +95,7 @@ test('rotating the password invalidates cookies issued for the old one', async (
   });
 
   const stale = await fetch(`${h.baseUrl}/s/secret/`, {
-    headers: { cookie: `a2w_site_${siteId()}=${encodeURIComponent(cookie)}` },
+    headers: { cookie: `a2w_site_${await siteId()}=${encodeURIComponent(cookie)}` },
   });
   assert.equal(stale.status, 401);
 });
@@ -139,6 +139,6 @@ test('enabling password protection without ever setting a password is refused', 
   assert.equal(tooShort.result.isError, true);
 });
 
-function siteId(): string {
-  return (h.db.prepare('SELECT id FROM sites WHERE slug = ?').get('secret') as { id: string }).id;
+async function siteId(): Promise<string> {
+  return (await h.db.first<{ id: string }>('SELECT id FROM sites WHERE slug = ?', 'secret'))!.id;
 }

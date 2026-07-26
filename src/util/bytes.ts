@@ -24,6 +24,24 @@ export function fromBase64Url(value: string): Uint8Array {
   return bytes;
 }
 
+/** Standard padded base64, for content handed to MCP clients. */
+export function toBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+export function fromBase64(value: string): Uint8Array {
+  const binary = atob(value.replace(/\s/g, ''));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+export function decodeUtf8(bytes: Uint8Array): string {
+  return new TextDecoder().decode(bytes);
+}
+
 export function toHex(bytes: Uint8Array): string {
   let out = '';
   for (const byte of bytes) out += byte.toString(16).padStart(2, '0');

@@ -279,7 +279,7 @@ test('the consent form is CSRF protected', async () => {
 test('an expired authorization request cannot be approved', async () => {
   const client = await registerLoopbackClient();
   const { rid, session, csrf } = await authorizeUpToConsent(client.client_id, 'challenge-value-placeholder-000000000000');
-  h.db.prepare('UPDATE oauth_auth_requests SET expires_at = ? WHERE id = ?').run(Date.now() - 1000, rid);
+  await h.db.run('UPDATE oauth_auth_requests SET expires_at = ? WHERE id = ?', Date.now() - 1000, rid);
   const res = await postConsent({ rid, csrf, decision: 'approve' }, session);
   assert.equal(res.status, 400);
   assert.match(await res.text(), /expired/i);

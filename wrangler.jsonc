@@ -1,0 +1,50 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "agent2web",
+  "main": "build/src/worker.js",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Deploy-to-Cloudflare reads these and provisions the resources, filling the
+  // ids back in. Two bindings, no KV: OAuth tokens live in D1 alongside the
+  // sites, because agent2web brings its own authorization server.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "agent2web",
+      "database_id": "placeholder-replaced-on-provision"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BLOBS",
+      "bucket_name": "agent2web-sites"
+    }
+  ],
+
+  "vars": {
+    // Must match the URL clients dial: it is the OAuth issuer and the audience
+    // of every token issued. Override in the dashboard after attaching a domain.
+    "A2W_PUBLIC_URL": "http://localhost:8787",
+
+    // Workers allows a 100 MB request body but only 128 MB of isolate memory,
+    // and a site arrives base64-inflated before being decoded.
+    "A2W_MAX_SITE_BYTES": "26214400",
+
+    // Set to a domain with a proxied *.<domain> record to serve every site on its
+    // own subdomain. workers.dev has no wildcards, so leave it unset there.
+    "A2W_SITES_BASE_DOMAIN": ""
+  },
+
+  // Secrets, never vars: A2W_SECRET, A2W_ADMIN_PASSWORD (or
+  // A2W_ADMIN_PASSWORD_HASH), and optionally A2W_API_TOKEN and
+  // A2W_ADMIN_TOTP_SECRET. `npm run gen-secrets` prints all of them.
+
+  "triggers": {
+    // Expired authorization requests, spent codes, dead tokens and stale login
+    // attempt counters are only ever garbage.
+    "crons": ["0 4 * * *"]
+  },
+
+  "observability": { "enabled": true }
+}
