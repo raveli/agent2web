@@ -4,6 +4,7 @@ import { createApp } from './app.js';
 import { ConfigError, loadConfig } from './config.js';
 import { hashPassword } from './auth/passwords.js';
 import { openDb } from './db.js';
+import { siteUrls } from './urls.js';
 
 function main(): void {
   let config;
@@ -28,9 +29,11 @@ function main(): void {
     console.log(`[agent2web] listening on ${config.bind}:${config.port}`);
     console.log(`[agent2web] public URL   ${config.publicUrl}`);
     console.log(`[agent2web] MCP endpoint ${config.mcpUrl}`);
+    // Built through siteUrls so the banner cannot drift from the real URLs.
+    const example = siteUrls(config, { slug: '<slug>', custom_domain: null });
     console.log(
-      `[agent2web] sites at     ${config.publicUrl}${config.sitesPathPrefix}/<slug>/` +
-        (config.sitesBaseDomain ? ` and https://<slug>.${config.sitesBaseDomain}/` : ''),
+      `[agent2web] sites at     ${example.path}` +
+        (example.subdomain ? ` and ${example.subdomain}` : ''),
     );
     if (!config.apiToken) console.log('[agent2web] static token auth disabled (A2W_API_TOKEN unset)');
   });

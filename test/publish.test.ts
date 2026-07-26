@@ -53,7 +53,9 @@ test('publishing a single page serves it over the path URL', async () => {
   assert.equal(data.slug, 'hello');
   assert.equal(data.created, true);
   assert.equal(data.urls.path, `${h.baseUrl}/s/hello/`);
-  assert.equal(data.urls.subdomain, 'http://hello.sites.example.test/');
+  // Host-based URLs must carry the app's port, or they do not resolve when the
+  // app runs on anything other than 80/443 (i.e. every local run).
+  assert.equal(data.urls.subdomain, `http://hello.sites.example.test:${h.port}/`);
 
   const page = await fetch(`${h.baseUrl}/s/hello/`);
   assert.equal(page.status, 200);
@@ -278,6 +280,7 @@ test('custom domains resolve by Host header', async () => {
     domain: 'Reports.Example.Test',
   });
   assert.equal(structured(set.result).custom_domain, 'reports.example.test');
+  assert.equal(structured(set.result).urls.custom, `http://reports.example.test:${h.port}/`);
   assert.match(textOf(set.result), /CNAME/);
 
   const res = await rawRequest(h.port, '/', { host: 'reports.example.test' });

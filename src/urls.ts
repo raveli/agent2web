@@ -11,11 +11,15 @@ export type SiteUrls = {
 
 export function siteUrls(config: Config, site: Pick<SiteRow, 'slug' | 'custom_domain'>): SiteUrls {
   const scheme = config.publicOrigin.protocol.replace(':', '');
+  // Host-based URLs reach the same listener as the app, so they carry the app's
+  // port when it is non-default. In production that is empty; on localhost:8080
+  // it is what makes the printed URL actually resolve.
+  const port = config.publicOrigin.port ? `:${config.publicOrigin.port}` : '';
   const path = `${config.publicUrl}${config.sitesPathPrefix}/${site.slug}/`;
   const subdomain = config.sitesBaseDomain
-    ? `${scheme}://${site.slug}.${config.sitesBaseDomain}/`
+    ? `${scheme}://${site.slug}.${config.sitesBaseDomain}${port}/`
     : undefined;
-  const custom = site.custom_domain ? `https://${site.custom_domain}/` : undefined;
+  const custom = site.custom_domain ? `${scheme}://${site.custom_domain}${port}/` : undefined;
   return { primary: custom ?? subdomain ?? path, path, subdomain, custom };
 }
 
