@@ -352,8 +352,8 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
     {
       title: 'Set a custom domain',
       description:
-        'Points a custom hostname at a site, or clears it when `domain` is omitted. The server starts answering for that Host immediately, ' +
-        'but DNS and TLS are the operator’s job: the returned instructions list the DNS record and the ingress host to add.',
+        'Points a custom hostname at a site, or clears it when `domain` is omitted. The Worker starts answering for that Host immediately, ' +
+        'but DNS and the certificate are the operator’s job: the returned instructions list the steps.',
       inputSchema: {
         slug: slugArg,
         domain: z.string().optional().describe('Hostname such as "reports.example.com". Omit to remove the domain.'),
@@ -372,9 +372,9 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
           );
         }
         const steps = [
-          `1. Point DNS: CNAME ${site.custom_domain} → ${config.publicOrigin.hostname} (or an A record to the ingress IP).`,
-          `2. Add "${site.custom_domain}" to the agent2web Ingress so it gets a TLS certificate.`,
-          '3. Once the certificate is issued the site answers on that host.',
+          `1. Add ${site.custom_domain} as a Custom Hostname (Cloudflare for SaaS) or, if you own the zone, a Workers route.`,
+          `2. Point its DNS at this Worker: CNAME ${site.custom_domain} → ${config.publicOrigin.hostname}.`,
+          '3. Cloudflare issues the certificate; the site answers on that host once it is active.',
         ];
         return ok(
           args.response_format as ResponseFormat,

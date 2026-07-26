@@ -209,8 +209,8 @@ export function siteDetailPage(
 
 <div class="panel">
   <h2>Custom domain</h2>
-  <p class="help">The server answers for this hostname as soon as you save. Pointing DNS at it and issuing a
-  certificate is still yours to do — see deploy/README.md.</p>
+  <p class="help">The Worker answers for this hostname as soon as you save. Pointing DNS at it and getting a
+  certificate is still yours to do — see docs/deploying.html.</p>
   <form method="post" action="/admin/sites/${slug}/domain">
     ${hidden(csrf)}
     <div class="field">

@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agent2web · Deploying</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..900,0..100,0..1;1,9..144,300..900,0..100,0..1&family=Geist:wght@300..700&family=JetBrains+Mono:wght@300..600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-display:'Fraunces', Georgia, serif;
+  --font-body:'Geist', -apple-system, sans-serif;
+  --font-mono:'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --paper:#f7f2e8; --paper-2:#f1ead8;
+  --ink:#1a1814; --ink-2:#4a423a; --ink-3:#7a6f64;
+  --rule:#1a181418; --rule-strong:#1a181433;
+  --accent:#c8302a;
+  --good:#2c4a3e; --tint-good:#e3ebe2; --tint-warn:#f2e8d4; --warn:#a06a1f;
+  --max:900px;
+}
+* { box-sizing:border-box; }
+html { -webkit-text-size-adjust:100%; scroll-behavior:smooth; }
+body {
+  margin:0; background:var(--paper); color:var(--ink);
+  font:400 16px/1.62 var(--font-body);
+  font-feature-settings:"ss01" 1,"cv11" 1;
+  padding:0 clamp(20px,5vw,48px) 96px;
+}
+body::before {
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:
+    radial-gradient(circle at 25% 15%, #fff9 0%, transparent 52%),
+    radial-gradient(circle at 75% 85%, #f1ead8aa 0%, transparent 52%);
+  mix-blend-mode:multiply; opacity:.6;
+}
+.wrap { max-width:var(--max); margin:0 auto; position:relative; z-index:1; }
+
+header.top { padding:52px 0 0; }
+.masthead {
+  display:flex; justify-content:space-between; align-items:baseline; gap:16px; flex-wrap:wrap;
+  font:400 10.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-3); border-bottom:1px solid var(--rule-strong); padding-bottom:12px;
+}
+.masthead strong { color:var(--ink); font-weight:500; letter-spacing:.16em; }
+h1 {
+  font-family:var(--font-display); font-variation-settings:"opsz" 144,"SOFT" 80,"WONK" 1;
+  font-weight:400; font-size:clamp(34px,5.4vw,54px); line-height:1.03;
+  margin:34px 0 14px; letter-spacing:-.015em;
+}
+h1 .it { font-style:italic; color:var(--accent); }
+.lede { font-size:18px; line-height:1.58; color:var(--ink-2); max-width:60ch; margin:0 0 6px; }
+.prereq {
+  margin:26px 0 0; padding:14px 18px; background:var(--paper-2);
+  border-left:3px solid var(--ink); font-size:14.5px; color:var(--ink-2);
+}
+.prereq b { color:var(--ink); }
+
+/* Route chooser */
+.routes { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:30px 0 0; }
+.route {
+  border:1px solid var(--rule-strong); padding:18px 20px; background:var(--paper-2);
+  position:relative;
+}
+.route h3 {
+  font-family:var(--font-display); font-weight:400; font-size:19px; margin:0 0 6px;
+  font-variation-settings:"opsz" 24,"SOFT" 50;
+}
+.route p { margin:0 0 10px; font-size:14px; color:var(--ink-2); }
+.route .who { font:400 10px/1.5 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3); display:block; margin-bottom:8px; }
+.route a { font-size:14px; }
+
+section.part { padding-top:56px; margin-top:44px; border-top:2px solid var(--ink); }
+section.part > h2 {
+  font-family:var(--font-display); font-weight:400; font-size:29px; margin:0 0 6px;
+  font-variation-settings:"opsz" 36,"SOFT" 60;
+}
+section.part > h2 .it { font-style:italic; color:var(--accent); }
+section.part > .deck { font-size:16px; color:var(--ink-2); max-width:62ch; margin:0 0 8px; }
+
+.step { display:grid; grid-template-columns:52px 1fr; gap:0 22px; padding:34px 0 0; }
+.step + .step { border-top:1px solid var(--rule); margin-top:34px; }
+.step-num {
+  font-family:var(--font-display); font-style:italic; font-weight:400;
+  font-size:40px; line-height:1; color:var(--accent); opacity:.85;
+  font-variation-settings:"opsz" 48,"SOFT" 40,"WONK" 1;
+}
+.step h3 {
+  font-family:var(--font-display); font-weight:400; font-size:22px; line-height:1.2;
+  margin:2px 0 8px; letter-spacing:-.01em;
+  font-variation-settings:"opsz" 30,"SOFT" 50;
+}
+.step > div > p { margin:0 0 14px; color:var(--ink-2); font-size:15px; max-width:66ch; }
+.step > div > p:last-child { margin-bottom:0; }
+
+.cmd, .out {
+  font:400 13px/1.65 var(--font-mono); white-space:pre; overflow-x:auto;
+  padding:13px 16px; margin:0 0 12px; border-radius:2px;
+}
+.cmd { background:var(--ink); color:#f3ede1; border-left:3px solid var(--accent); }
+.cmd .c { color:#8d8377; }
+.out {
+  background:var(--paper-2); color:var(--ink-2); border-left:3px solid var(--rule-strong);
+  font-size:12.5px;
+}
+.out-label {
+  font:400 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-3); display:block; margin:0 0 6px;
+}
+code {
+  font-family:var(--font-mono); font-size:.87em;
+  background:#1a18140f; padding:1px 5px; border-radius:2px;
+}
+a { color:var(--accent); text-decoration-thickness:1px; text-underline-offset:2px; }
+
+.callout {
+  border-left:3px solid var(--warn); background:var(--tint-warn);
+  padding:15px 20px; margin:16px 0 0; font-size:14.5px; color:var(--ink-2);
+}
+.callout.good { border-left-color:var(--good); background:var(--tint-good); }
+.callout.hard { border-left-color:var(--accent); background:#f2e0e0; }
+.callout .label {
+  font:400 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-3); display:block; margin-bottom:5px;
+}
+
+table { width:100%; border-collapse:collapse; font-size:13.5px; margin-top:20px; }
+thead th {
+  text-align:left; font:400 10px/1 var(--font-mono); letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink-3);
+  padding:0 14px 9px 0; border-bottom:1.5px solid var(--ink);
+}
+tbody td { padding:12px 14px 12px 0; border-bottom:1px solid var(--rule); vertical-align:top; color:var(--ink-2); }
+tbody td:first-child { color:var(--ink); }
+tbody tr:hover { background:#00000005; }
+.mono-cell { font-family:var(--font-mono); font-size:12px; }
+
+abbr[title] {
+  text-decoration:underline dotted #1a181466; text-underline-offset:3px;
+  cursor:help; border:0;
+}
+abbr[title]:hover { text-decoration-color:var(--accent); }
+
+.verified { font:400 10px/1 var(--font-mono); letter-spacing:.12em; text-transform:uppercase;
+  padding:3px 7px; border:1px solid var(--rule-strong); color:var(--ink-3); white-space:nowrap; }
+.verified.no { border-color:var(--accent); color:var(--accent); }
+
+footer {
+  margin-top:56px; padding-top:18px; border-top:1px solid var(--rule-strong);
+  font:400 11px/1.7 var(--font-mono); letter-spacing:.06em; color:var(--ink-3);
+  display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
+}
+
+@media (max-width:640px) {
+  .routes { grid-template-columns:1fr; }
+  .step { grid-template-columns:1fr; gap:0; }
+  .step-num { font-size:30px; margin-bottom:6px; }
+}
+@media print {
+  body { background:#fff; padding:0; }
+  body::before { display:none; }
+  .cmd { background:#f2f2f2; color:#111; }
+  .step, .route { page-break-inside:avoid; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="masthead">
+    <span><strong>agent2web</strong> · Runbook</span>
+    <span>Deploying · Cloudflare Workers</span>
+  </div>
+  <h1>From your laptop <span class="it">to the internet.</span></h1>
+  <p class="lede">
+    agent2web runs on Cloudflare Workers with D1 for metadata and R2 for the files. There is no
+    server to maintain and nothing to keep patched. Run it locally first — that part needs no
+    Cloudflare account at all — then deploy either from a browser or from the terminal.
+  </p>
+  <p class="prereq">
+    <b>You will need:</b> a Cloudflare account on the <b>Workers Paid plan ($5/mo)</b>, and a
+    domain on Cloudflare only if you want <code>&lt;slug&gt;.yourdomain.com</code> URLs. The paid
+    plan is for CPU time, not scale — see <a href="#why-paid">why</a>.
+  </p>
+
+  <div class="routes">
+    <div class="route">
+      <span class="who">If you want it working in five minutes</span>
+      <h3>Deploy from the browser</h3>
+      <p>One button. Cloudflare clones the repo, creates the database and bucket, and sets up
+      automatic redeploys on every push.</p>
+      <a href="#browser">Jump to the button route →</a>
+    </div>
+    <div class="route">
+      <span class="who">If you want to see every step</span>
+      <h3>Deploy from the terminal</h3>
+      <p>Six <code>wrangler</code> commands. Slower, but nothing is hidden and it is the same path
+      you will use for later changes.</p>
+      <a href="#terminal">Jump to the CLI route →</a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ============================================ LOCAL -->
+<section class="part" id="local">
+  <h2>First, run it <span class="it">locally.</span></h2>
+  <p class="deck">Worth doing even if you intend to deploy immediately: it proves the build works on
+  your machine, and it is where you will do all subsequent development. No Cloudflare account is
+  involved — D1 and R2 are emulated on disk.</p>
+
+  <div class="step">
+    <div class="step-num">01</div>
+    <div>
+      <h3>Install and run the tests</h3>
+      <div class="cmd">git clone https://github.com/raveli/agent2web &amp;&amp; cd agent2web
+npm install
+npm test</div>
+      <span class="out-label">Expect</span>
+      <div class="out"># tests 79
+# pass 79
+# fail 0</div>
+      <p>The suite bundles the Worker exactly as deployment does, boots it in Miniflare with local
+      D1 and R2, and drives it over HTTP. A green run means the code path that deploys works.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">02</div>
+    <div>
+      <h3>Create local secrets and start it</h3>
+      <div class="cmd">npm run gen-secrets              <span class="c"># save the admin password it prints</span>
+cp .dev.vars.example .dev.vars   <span class="c"># paste the values in</span>
+npm run dev</div>
+      <span class="out-label">Expect</span>
+      <div class="out">[wrangler:info] Ready on http://localhost:8787</div>
+      <p>Then publish something and open it:</p>
+      <div class="cmd">curl -s localhost:8787/mcp \
+  -H "authorization: Bearer $A2W_API_TOKEN" \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{
+        "name":"site_publish",
+        "arguments":{"slug":"hello","html":"&lt;h1&gt;Hello&lt;/h1&gt;"}}}'
+
+open http://localhost:8787/s/hello/
+open http://localhost:8787/admin          <span class="c"># sign in with the admin password</span></div>
+      <div class="callout good">
+        <span class="label">Full local walkthrough</span>
+        <a href="local-testing.html">docs/local-testing.html</a> covers the password gate,
+        connecting Claude Code, and a troubleshooting table of the failures we actually hit.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ BROWSER -->
+<section class="part" id="browser">
+  <h2>Deploy from <span class="it">the browser.</span></h2>
+  <p class="deck">The button reads <code>wrangler.jsonc</code>, provisions what it declares, and
+  connects Workers Builds so every push to your copy redeploys.</p>
+
+  <div class="step">
+    <div class="step-num">01</div>
+    <div>
+      <h3>Generate your secrets first</h3>
+      <p>The setup flow asks for them, so have them ready. Run this locally:</p>
+      <div class="cmd">npm install &amp;&amp; npm run gen-secrets</div>
+      <span class="out-label">Prints</span>
+      <div class="out">A2W_SECRET=…            signs cookies, hashes tokens at rest
+A2W_API_TOKEN=…         optional bearer token for Claude Code / curl / CI
+A2W_ADMIN_PASSWORD_HASH=pbkdf2.600000.…
+
+# Admin password (stored nowhere else — save it now): …</div>
+      <div class="callout hard">
+        <span class="label">Save the admin password now</span>
+        Only its hash is stored. Lose it and the only way back is to set a new
+        <code>A2W_ADMIN_PASSWORD_HASH</code> on the Worker.
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">02</div>
+    <div>
+      <h3>Press the button</h3>
+      <p>From the <a href="https://github.com/raveli/agent2web">repository README</a>, or directly:</p>
+      <div class="cmd">https://deploy.workers.cloudflare.com/?url=https://github.com/raveli/agent2web</div>
+      <p>Cloudflare clones the repo into your GitHub account, then provisions the two resources
+      declared in <code>wrangler.jsonc</code>:</p>
+      <table>
+        <thead><tr><th>Binding</th><th>Resource</th><th>Holds</th></tr></thead>
+        <tbody>
+          <tr><td class="mono-cell">DB</td><td>D1 database</td><td>Sites, versions, file index, OAuth tokens, sessions</td></tr>
+          <tr><td class="mono-cell">BLOBS</td><td>R2 bucket</td><td>The published files themselves</td></tr>
+        </tbody>
+      </table>
+      <p>Paste the secrets from step 01 when asked. Workers Builds is wired up as part of the flow,
+      so later pushes deploy themselves.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">03</div>
+    <div>
+      <h3>Set <code>A2W_PUBLIC_URL</code> to the real URL</h3>
+      <p>This is the one step that is easy to skip and breaks things quietly. The Worker ships with
+      a placeholder pointing at localhost.</p>
+      <p>Dashboard → your Worker → <b>Settings</b> → <b>Variables and Secrets</b> → set
+      <code>A2W_PUBLIC_URL</code> to exactly the origin you will dial, with no trailing path:</p>
+      <div class="out">A2W_PUBLIC_URL=https://agent2web.&lt;your-subdomain&gt;.workers.dev</div>
+      <div class="callout hard">
+        <span class="label">Why exactly</span>
+        It is the <abbr title="OAuth 2.1 — the authorization flow Claude's connectors require">OAuth</abbr>
+        issuer and the audience of every token this server mints. If it does not match the URL the
+        client used, Claude's connector fails to authenticate — while the site itself keeps working,
+        which makes it a confusing failure to diagnose.
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">04</div>
+    <div>
+      <h3>Check it came up</h3>
+      <div class="cmd">curl -s https://agent2web.&lt;your-subdomain&gt;.workers.dev/healthz</div>
+      <span class="out-label">Expect</span>
+      <div class="out">{"status":"ok","sites":0,"version":"0.1.0"}</div>
+      <p>A <code>500</code> with a configuration message instead means a secret is missing or
+      malformed — the body names the variable. That is deliberate: bad configuration stops the
+      Worker rather than half-working.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ TERMINAL -->
+<section class="part" id="terminal">
+  <h2>Deploy from <span class="it">the terminal.</span></h2>
+  <p class="deck">Same result, nothing hidden. This is also how you deploy later changes if you
+  would rather not push to deploy.</p>
+
+  <div class="step">
+    <div class="step-num">01</div>
+    <div>
+      <h3>Log in and create the two resources</h3>
+      <div class="cmd">npx wrangler login
+
+npx wrangler d1 create agent2web
+npx wrangler r2 bucket create agent2web-sites</div>
+      <p><code>d1 create</code> prints a <code>database_id</code>. Put it in
+      <code>wrangler.jsonc</code>, replacing the placeholder:</p>
+      <div class="out">"d1_databases": [
+  { "binding": "DB", "database_name": "agent2web", "database_id": "&lt;the uuid it printed&gt;" }
+]</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">02</div>
+    <div>
+      <h3>Set the public URL, then the secrets</h3>
+      <p>Edit <code>vars.A2W_PUBLIC_URL</code> in <code>wrangler.jsonc</code> to the origin you will
+      dial. If you do not know it yet, deploy once, read the URL wrangler prints, then set it and
+      deploy again.</p>
+      <div class="cmd">npm run gen-secrets              <span class="c"># save the admin password</span>
+
+npx wrangler secret put A2W_SECRET
+npx wrangler secret put A2W_ADMIN_PASSWORD_HASH
+npx wrangler secret put A2W_API_TOKEN            <span class="c"># optional</span></div>
+      <p>Each prompts for the value and stores it encrypted. Never put these in
+      <code>wrangler.jsonc</code> — that file is committed.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">03</div>
+    <div>
+      <h3>Deploy</h3>
+      <div class="cmd">npx wrangler deploy --dry-run    <span class="c"># check the config resolves, no upload</span>
+npm run deploy</div>
+      <span class="out-label">The dry run prints what it will do</span>
+      <div class="out">Total Upload: 1407.21 KiB / gzip: 258.83 KiB
+Your Worker has access to the following bindings:
+  env.DB (agent2web)              D1 Database
+  env.BLOBS (agent2web-sites)     R2 Bucket
+  env.A2W_PUBLIC_URL              Environment Variable</div>
+      <p>The database migrates itself on the first request. To watch it live:</p>
+      <div class="cmd">npx wrangler tail</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ CONNECT -->
+<section class="part" id="connect">
+  <h2>Connect <span class="it">Claude.</span></h2>
+
+  <div class="step">
+    <div class="step-num">01</div>
+    <div>
+      <h3>Claude web or desktop</h3>
+      <p>Settings → Connectors → <b>Add custom connector</b>, with the URL:</p>
+      <div class="out">https://&lt;your-worker&gt;/mcp</div>
+      <p>Claude registers itself, then sends you to <em>your</em> sign-in page. Enter the admin
+      password and approve the connection. Claude never sees the password — it receives a token
+      scoped to publishing, which you can revoke at <code>/admin/connections</code>.</p>
+      <div class="callout">
+        <span class="label">Needs a deploy</span>
+        This flow cannot run against localhost: it requires public HTTPS with a certificate a
+        browser trusts. To try it before deploying, use
+        <code>cloudflared tunnel --url http://localhost:8787</code> and set
+        <code>A2W_PUBLIC_URL</code> to the tunnel hostname.
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">02</div>
+    <div>
+      <h3>Claude Code</h3>
+      <div class="cmd">claude mcp add --transport http agent2web https://&lt;your-worker&gt;/mcp
+
+<span class="c"># or skip the browser entirely with the static token:</span>
+claude mcp add --transport http agent2web https://&lt;your-worker&gt;/mcp \
+  --header "Authorization: Bearer $A2W_API_TOKEN"</div>
+      <p>Then ask it to publish something. <code>site_publish</code> returns the URL.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ DOMAINS -->
+<section class="part" id="domains">
+  <h2>Your own <span class="it">domain.</span></h2>
+  <p class="deck">Optional. Path URLs work from the moment you deploy; this is about prettier
+  addresses and, for subdomains, giving each site its own browser origin.</p>
+
+  <table>
+    <thead><tr><th>URL form</th><th>Needs</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono-cell">/s/&lt;slug&gt;/</td>
+        <td>nothing</td>
+        <td>Works immediately, including on <code>workers.dev</code>. Pages get a sandbox
+        <abbr title="Content Security Policy — the header that constrains what a page may do">CSP</abbr>
+        because they share the Worker's origin, so <code>localStorage</code> and same-origin
+        <code>fetch</code> will not work in them.</td>
+      </tr>
+      <tr>
+        <td class="mono-cell">&lt;slug&gt;.sites.example.com</td>
+        <td>a domain on Cloudflare</td>
+        <td>Each site gets its own origin, so no sandbox and root-absolute paths like
+        <code>/style.css</code> resolve.</td>
+      </tr>
+      <tr>
+        <td class="mono-cell">reports.customer.example</td>
+        <td>Cloudflare for SaaS</td>
+        <td>Per-site custom domains. Supported by the app; the provisioning is manual.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="step">
+    <div class="step-num">01</div>
+    <div>
+      <h3>Subdomain hosting</h3>
+      <p>Three things, all in the Cloudflare dashboard for a domain you have added:</p>
+      <div class="out">1. DNS      → a proxied (orange cloud) record for  *.sites.example.com
+2. Worker   → Settings → Domains &amp; Routes → add route  *.sites.example.com/*
+3. Variable → A2W_SITES_BASE_DOMAIN = sites.example.com</div>
+      <p>Use a different domain for sites than for the app. Published pages are arbitrary HTML;
+      giving them their own origin is what keeps them away from your admin session.</p>
+      <div class="callout hard">
+        <span class="label">workers.dev has no wildcards</span>
+        There is no way to get <code>&lt;slug&gt;.your-worker.workers.dev</code> — wildcard
+        subdomains do not exist there. Subdomain hosting requires a domain you control.
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">02</div>
+    <div>
+      <h3>A custom domain for one site</h3>
+      <div class="cmd"><span class="c"># from Claude, or any MCP client</span>
+site_set_domain(slug: "quarterly", domain: "reports.customer.example")</div>
+      <p>The Worker answers for that hostname immediately; DNS and the certificate are yours to
+      arrange. The tool prints the steps, and the site's admin page repeats them.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ COSTS -->
+<section class="part" id="why-paid">
+  <h2>Why the paid plan, <span class="it">and what it costs.</span></h2>
+
+  <p class="deck">The $5/mo Workers Paid plan is required for <b>CPU time per request</b>, not for
+  traffic. Password hashing is PBKDF2-SHA256 at 600,000 iterations, which measures about 130 ms.
+  The Free plan caps a request at 10 ms of CPU — enough for roughly 40,000 iterations, an order of
+  magnitude below current guidance. Rather than weaken the hash, agent2web asks for the paid plan.</p>
+
+  <table>
+    <thead><tr><th>Measured</th><th>Free plan</th><th>Paid plan</th></tr></thead>
+    <tbody>
+      <tr><td>10,000 iterations · 2.3 ms</td><td>fits</td><td>fits</td></tr>
+      <tr><td>50,000 iterations · 10.3 ms</td><td>at the ceiling</td><td>fits</td></tr>
+      <tr><td>210,000 iterations · 43 ms</td><td>over</td><td>fits</td></tr>
+      <tr><td><b>600,000 iterations · 130 ms</b></td><td>over</td><td><b>0.4% of budget</b></td></tr>
+    </tbody>
+  </table>
+
+  <p style="margin-top:20px">In practice the cost is negligible. The paid plan includes 30M
+  CPU-milliseconds a month, which is about <b>230,000 password hashes</b>. Real usage is a handful:
+  the owner signs in once per 12-hour session, and a visitor to a protected site pays it once per
+  seven-day cookie. Serving pages is a few milliseconds. R2 gives 10 GB and charges nothing for
+  egress.</p>
+
+  <div class="callout good">
+    <span class="label">Where it is not per-session</span>
+    HTTP Basic auth (<code>curl -u :password</code>) issues no cookie, so it pays the hash on every
+    request. That path is throttled on the same counter as the login form, which caps both the
+    brute-force risk and the CPU it can consume.
+  </div>
+</section>
+
+<!-- ============================================ TROUBLE -->
+<section class="part" id="trouble">
+  <h2>When it <span class="it">misbehaves.</span></h2>
+
+  <table>
+    <thead><tr><th>Symptom</th><th>Cause and fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Worker returns 500 with a configuration message</td>
+        <td>Deliberate — bad config stops startup instead of half-working, and the body names the
+        variable. A <code>scrypt.</code> hash from an older self-hosted build lands here too:
+        Cloudflare has no scrypt, so regenerate with <code>npm run gen-secrets</code>.</td>
+      </tr>
+      <tr>
+        <td>Claude's connector will not authenticate, but the site loads fine</td>
+        <td>Almost always <code>A2W_PUBLIC_URL</code> not matching the URL you dialled. It is the
+        OAuth issuer and token audience, so it must be exact — scheme, host, no trailing slash or
+        path.</td>
+      </tr>
+      <tr>
+        <td><code>406 Not Acceptable</code> from <code>/mcp</code></td>
+        <td>The <code>accept</code> header must list both <code>application/json</code> and
+        <code>text/event-stream</code>. That is the MCP spec, not a quirk of this server.</td>
+      </tr>
+      <tr>
+        <td>Admin login rejects the right password</td>
+        <td>Confirm <code>A2W_ADMIN_PASSWORD_HASH</code> was stored whole. Hashes are dot-separated
+        precisely so an unquoted <code>$</code> cannot be eaten by a shell.</td>
+      </tr>
+      <tr>
+        <td>Subdomain URLs 404</td>
+        <td>All three pieces are needed: proxied wildcard DNS, a Workers route for
+        <code>*.sites.example.com/*</code>, and <code>A2W_SITES_BASE_DOMAIN</code> as a bare
+        hostname with no port. On <code>workers.dev</code> it cannot work at all.</td>
+      </tr>
+      <tr>
+        <td>A published page cannot use <code>localStorage</code></td>
+        <td>Expected on <code>/s/&lt;slug&gt;/</code> URLs: they are sandboxed because they share
+        the Worker's origin. Give sites their own subdomain, or set
+        <code>A2W_SITE_SANDBOX=never</code> and accept sharing the origin with the admin UI.</td>
+      </tr>
+      <tr>
+        <td>Want to see what the Worker is doing</td>
+        <td><code>npx wrangler tail</code> streams live logs. The dashboard's Observability tab
+        keeps history.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================ HONESTY -->
+<section class="part" id="verified">
+  <h2>What here is <span class="it">actually verified.</span></h2>
+  <p class="deck">This guide was written alongside the port, and not all of it has been exercised
+  against a live Cloudflare account. Where it has not, that is said rather than implied.</p>
+
+  <table>
+    <thead><tr><th>Claim</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>The 79 tests pass against the real Worker bundle in Miniflare with local D1 and R2</td><td><span class="verified">verified</span></td></tr>
+      <tr><td><code>npm run dev</code> serves, publishes, gates on password, and runs the admin UI</td><td><span class="verified">verified</span></td></tr>
+      <tr><td><code>wrangler deploy --dry-run</code> resolves both bindings; 259 KB gzipped</td><td><span class="verified">verified</span></td></tr>
+      <tr><td>Every <code>wrangler</code> subcommand quoted here exists in wrangler 4.114</td><td><span class="verified">verified</span></td></tr>
+      <tr><td>PBKDF2 timings in the table above</td><td><span class="verified">measured, Apple silicon</span></td></tr>
+      <tr><td>The same hash fits the CPU budget on Cloudflare's own hardware</td><td><span class="verified no">not yet measured</span></td></tr>
+      <tr><td>The Deploy button provisions D1 and R2 from <code>wrangler.jsonc</code></td><td><span class="verified no">from Cloudflare's docs</span></td></tr>
+      <tr><td>Claude web's connector completes the OAuth flow against a deployed Worker</td><td><span class="verified no">not yet run</span></td></tr>
+    </tbody>
+  </table>
+
+  <p style="margin-top:20px">The unverified rows all need an account, which is the next thing to
+  do. Cloudflare's x86 cores may be 1.5–2× slower than the machine these timings came from, which
+  would put the hash at 200–260 ms — still under 1% of the 30-second budget.</p>
+</section>
+
+</main>
+
+<footer>
+  <span>agent2web · docs/deploying.html</span>
+  <span>Hover dotted terms for definitions</span>
+</footer>
+
+</div>
+</body>
+</html>

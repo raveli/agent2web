@@ -17,6 +17,9 @@ from a browser in a few clicks.
 
 ## Deploy
 
+Full guide with both routes, costs and troubleshooting:
+**[docs/deploying.html](docs/deploying.html)**.
+
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/raveli/agent2web)
 
 The button clones the repo into your GitHub account, provisions the D1 database
@@ -96,7 +99,7 @@ Default limits: 200 files, 5 MB per file, 25 MB per site, 10 versions retained.
 
 ## Local development
 
-See [docs/local-testing.html](docs/local-testing.html) for a walkthrough. In short:
+Full walkthrough in [docs/local-testing.html](docs/local-testing.html). In short:
 
 ```bash
 npm install

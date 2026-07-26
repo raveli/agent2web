@@ -223,7 +223,7 @@ export function adminRoutes(): Hono<Env> {
       const site = await c.var.store.setDomain(String(c.req.param('slug')), raw || null);
       return {
         message: site.custom_domain
-          ? `Answering for ${site.custom_domain}. Point its DNS at this server and add the host to your ingress.`
+          ? `Answering for ${site.custom_domain}. Point its DNS here and add it as a Custom Hostname or Workers route.`
           : 'Custom domain removed.',
         to: sitePath(site.slug),
       };
