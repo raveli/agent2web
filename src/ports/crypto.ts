@@ -16,6 +16,8 @@ export interface CryptoPort {
   hmac(key: string, value: string): Promise<string>;
   /** Content hash for published files. Lowercase hex. */
   sha256Hex(data: Uint8Array): Promise<string>;
+  /** PKCE S256 challenges are base64url, not hex. */
+  sha256Base64Url(value: string): Promise<string>;
 
   randomToken(bytes?: number): string;
 }

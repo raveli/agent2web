@@ -54,6 +54,11 @@ export class WebCryptoProvider implements CryptoPort {
     return toHex(new Uint8Array(digest));
   }
 
+  async sha256Base64Url(value: string): Promise<string> {
+    const digest = await crypto.subtle.digest('SHA-256', utf8(value));
+    return toBase64Url(new Uint8Array(digest));
+  }
+
   randomToken(bytes = 32): string {
     return toBase64Url(crypto.getRandomValues(new Uint8Array(bytes)));
   }
