@@ -1,5 +1,3 @@
-import { randomBytes } from 'node:crypto';
-
 const ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
 /**
@@ -7,7 +5,8 @@ const ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
  * directory names. 12 chars of this alphabet is ~62 bits of entropy.
  */
 export function newId(length = 12): string {
-  const bytes = randomBytes(length);
+  // getRandomValues rather than node:crypto, so this module stays portable.
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
   let out = '';
   for (let i = 0; i < length; i++) out += ALPHABET[bytes[i]! % ALPHABET.length];
   return out;
