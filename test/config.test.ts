@@ -47,7 +47,8 @@ test('a hash this build cannot verify stops startup, not the login form', async 
   // scrypt was the self-hosted build's format. Cloudflare has no scrypt, so a
   // hash carried over would reject every correct password at the login form
   // unless startup refuses it and says why.
-  const scrypt = 'scrypt.16384.8.1.8QvULMbPrW5kdWCDdzItgQ.ZotXBBGpbl7L92C_lVpS4UNs3LZV5Py44zjQirqrAoU';
+  // Synthetic: a scrypt hash of a throwaway string, never any real credential.
+  const scrypt = 'scrypt.16384.8.1.lb-a6OC7VST81WqHb_sQXA.cxwLSBEzdyJoc3ft52u2XQ8tgDd9luMfxdN_7CfX61g';
   await assert.rejects(() => load({ ...b, A2W_ADMIN_PASSWORD_HASH: scrypt }), /can verify/);
   await assert.rejects(() => load({ ...b, A2W_ADMIN_PASSWORD_HASH: scrypt }), /Cloudflare has no/);
 
