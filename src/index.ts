@@ -2,14 +2,13 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createApp } from './app.js';
 import { ConfigError, loadConfig } from './config.js';
-import { hashPassword } from './auth/passwords.js';
 import { openDb } from './db.js';
 import { siteUrls } from './urls.js';
 
 function main(): void {
   let config;
   try {
-    config = loadConfig(process.env, hashPassword);
+    config = loadConfig(process.env);
   } catch (err) {
     if (err instanceof ConfigError) {
       console.error(err.message);

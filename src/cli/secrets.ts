@@ -14,7 +14,8 @@ const lines = [
   '# agent2web secrets — copy into .env or your Kubernetes Secret',
   `A2W_SECRET=${randomToken(48)}`,
   `A2W_API_TOKEN=${randomToken(32)}`,
-  `A2W_ADMIN_PASSWORD_HASH='${hashPassword(password)}'`,
+  // No quotes needed: none of these values contain characters a shell expands.
+  `A2W_ADMIN_PASSWORD_HASH=${hashPassword(password)}`,
   '',
   `# Admin password (not stored anywhere else — save it now): ${password}`,
   '# TOTP is optional: set A2W_ADMIN_TOTP_SECRET to a base32 secret to require a 6-digit code.',

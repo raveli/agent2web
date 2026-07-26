@@ -39,7 +39,6 @@ export async function startHarness(
       A2W_TRUST_PROXY: 'false',
       ...env,
     } as NodeJS.ProcessEnv,
-    hashPassword,
   );
 
   const db = openDb(join(dataDir, 'agent2web.db'));

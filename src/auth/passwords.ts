@@ -9,7 +9,12 @@ const KEY_LEN = 32;
  * Hashes a password with scrypt from node:crypto — no native dependency, and
  * strong enough for the single-owner credentials this app protects.
  *
- * Format: `scrypt$N$r$p$<salt-b64>$<key-b64>`
+ * Format: `scrypt.N.r.p.<salt-b64url>.<key-b64url>`
+ *
+ * Dots rather than the conventional `$` separators: this value's normal home is
+ * an environment variable or a .env file, and `$` in an unquoted .env line gets
+ * expanded by the shell into a corrupted hash that still looks plausible.
+ * base64url never produces a dot, so the encoding stays unambiguous.
  */
 export function hashPassword(plaintext: string, salt = randomBytes(16)): string {
   const key = scryptSync(plaintext.normalize('NFKC'), salt, KEY_LEN, {
@@ -25,37 +30,51 @@ export function hashPassword(plaintext: string, salt = randomBytes(16)): string 
     SCRYPT_p,
     salt.toString('base64url'),
     key.toString('base64url'),
-  ].join('$');
+  ].join('.');
 }
 
-export function verifyPassword(plaintext: string, stored: string): boolean {
-  const parts = stored.split('$');
-  if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
+export type ScryptHash = { N: number; r: number; p: number; salt: Buffer; key: Buffer };
+
+/**
+ * Parses a stored hash, returning undefined when it is not one. Also accepts the
+ * older `$`-separated form so hashes generated before the switch keep working.
+ */
+export function parseScryptHash(stored: string): ScryptHash | undefined {
+  if (typeof stored !== 'string') return undefined;
+  const separator = stored.includes('.') ? '.' : '$';
+  const parts = stored.trim().split(separator);
+  if (parts.length !== 6 || parts[0] !== 'scrypt') return undefined;
   const N = Number(parts[1]);
   const r = Number(parts[2]);
   const p = Number(parts[3]);
-  if (!Number.isInteger(N) || !Number.isInteger(r) || !Number.isInteger(p)) return false;
-  let salt: Buffer;
-  let expected: Buffer;
-  try {
-    salt = Buffer.from(parts[4]!, 'base64url');
-    expected = Buffer.from(parts[5]!, 'base64url');
-  } catch {
-    return false;
-  }
-  if (salt.length === 0 || expected.length === 0) return false;
+  if (!Number.isInteger(N) || !Number.isInteger(r) || !Number.isInteger(p)) return undefined;
+  if (N < 2 || r < 1 || p < 1) return undefined;
+  if (!/^[A-Za-z0-9_-]+$/.test(parts[4]!) || !/^[A-Za-z0-9_-]+$/.test(parts[5]!)) return undefined;
+  const salt = Buffer.from(parts[4]!, 'base64url');
+  const key = Buffer.from(parts[5]!, 'base64url');
+  if (salt.length === 0 || key.length === 0) return undefined;
+  return { N, r, p, salt, key };
+}
+
+export function isValidPasswordHash(stored: string): boolean {
+  return parseScryptHash(stored) !== undefined;
+}
+
+export function verifyPassword(plaintext: string, stored: string): boolean {
+  const parsed = parseScryptHash(stored);
+  if (!parsed) return false;
   let actual: Buffer;
   try {
-    actual = scryptSync(plaintext.normalize('NFKC'), salt, expected.length, {
-      N,
-      r,
-      p,
+    actual = scryptSync(plaintext.normalize('NFKC'), parsed.salt, parsed.key.length, {
+      N: parsed.N,
+      r: parsed.r,
+      p: parsed.p,
       maxmem: 64 * 1024 * 1024,
     });
   } catch {
     return false;
   }
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
+  return actual.length === parsed.key.length && timingSafeEqual(actual, parsed.key);
 }
 
 /** Constant-time comparison of two secrets of arbitrary length. */

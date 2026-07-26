@@ -161,7 +161,7 @@ Required:
 | --- | --- |
 | `A2W_PUBLIC_URL` | Public origin of the app, e.g. `https://a2w.example.com`. OAuth issuer and token audience. No path. |
 | `A2W_SECRET` | 32+ chars. Signs cookies, hashes tokens at rest. |
-| `A2W_ADMIN_PASSWORD_HASH` | From `npm run gen-secrets`. (`A2W_ADMIN_PASSWORD` works but warns.) |
+| `A2W_ADMIN_PASSWORD_HASH` | From `npm run gen-secrets`, in the form `scrypt.16384.8.1.<salt>.<key>`. (`A2W_ADMIN_PASSWORD` works but warns; if both are set the hash wins.) |
 
 Optional:
 
@@ -193,6 +193,15 @@ npm run typecheck
 npm test              # builds, then runs the suite with node --test
 npm run dev           # build, then run with --watch on the compiled output
 ```
+
+`npm start` and `npm run dev` do not read `.env` themselves. Either export it
+first (`set -a && . ./.env && set +a`) or run the app through
+`docker compose up`, which loads the file directly.
+
+For a local run, `A2W_SITES_BASE_DOMAIN=sites.localhost` gives you subdomain
+hosting with no DNS setup at all — `*.localhost` resolves to 127.0.0.1 — so you
+can see the difference between the two URL forms (root-absolute asset paths and
+the sandbox CSP) without deploying anything.
 
 Layout: `src/mcp` (server + tools), `src/hosting` (resolve → gate → serve),
 `src/auth` (OAuth provider, sessions, passwords, TOTP), `src/admin` (UI),

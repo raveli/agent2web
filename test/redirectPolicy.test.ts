@@ -15,7 +15,6 @@ const config = loadConfig(
     A2W_ADMIN_PASSWORD_HASH: hashPassword('a-good-admin-password'),
     A2W_EXTRA_REDIRECT_URIS: 'https://tools.example.org/oauth/callback',
   } as NodeJS.ProcessEnv,
-  hashPassword,
 );
 
 test('Claude hosted callbacks and loopback URIs are allowed', () => {

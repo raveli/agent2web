@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { hashPassword, isValidPasswordHash } from './auth/passwords.js';
 
 /**
  * All configuration comes from the environment so the same image can run under
@@ -112,13 +113,8 @@ export class ConfigError extends Error {}
 /**
  * Parses and validates configuration, throwing a single readable error listing
  * every problem rather than failing one variable at a time.
- *
- * `hashPassword` is injected to keep this module free of crypto imports for tests.
  */
-export function loadConfig(
-  env: NodeJS.ProcessEnv,
-  hashPassword: (plaintext: string) => string,
-): Config {
+export function loadConfig(env: NodeJS.ProcessEnv): Config {
   const parsed = schema.safeParse(env);
   if (!parsed.success) {
     const lines = parsed.error.issues.map(issue => `  ${issue.path.join('.')}: ${issue.message}`);
@@ -128,7 +124,24 @@ export function loadConfig(
   const warnings: string[] = [];
 
   let adminPasswordHash = v.A2W_ADMIN_PASSWORD_HASH;
-  if (!adminPasswordHash) {
+  if (adminPasswordHash) {
+    // A malformed hash can never match any password, so refuse to start rather
+    // than serve a login page that always says "Incorrect credentials".
+    if (!isValidPasswordHash(adminPasswordHash)) {
+      throw new ConfigError(
+        'Invalid configuration:\n' +
+          '  A2W_ADMIN_PASSWORD_HASH: is not a valid scrypt hash. Expected ' +
+          '"scrypt.16384.8.1.<salt>.<key>" from `npm run gen-secrets`.\n' +
+          '    If the value contains "$" it is an older hash and your shell probably expanded it:\n' +
+          "    quote it in .env (A2W_ADMIN_PASSWORD_HASH='scrypt$...') or generate a new one.",
+      );
+    }
+    if (v.A2W_ADMIN_PASSWORD) {
+      warnings.push(
+        'Both A2W_ADMIN_PASSWORD_HASH and A2W_ADMIN_PASSWORD are set; the hash wins and the plaintext is ignored.',
+      );
+    }
+  } else {
     if (!v.A2W_ADMIN_PASSWORD) {
       throw new ConfigError(
         'Invalid configuration:\n  A2W_ADMIN_PASSWORD_HASH: is required (or set A2W_ADMIN_PASSWORD). Run `npm run gen-secrets` to generate one.',
