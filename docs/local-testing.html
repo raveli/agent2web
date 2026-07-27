@@ -1,162 +1,45 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>agent2web · Testing it locally</title>
+<meta name="description" content="Run the real Worker on your machine with emulated D1 and R2.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..900,0..100,0..1;1,9..144,300..900,0..100,0..1&family=Geist:wght@300..700&family=JetBrains+Mono:wght@300..600&display=swap" rel="stylesheet">
-<style>
-:root {
-  --font-display:'Fraunces', Georgia, serif;
-  --font-body:'Geist', -apple-system, sans-serif;
-  --font-mono:'JetBrains Mono', ui-monospace, Menlo, monospace;
-  --paper:#f7f2e8; --paper-2:#f1ead8;
-  --ink:#1a1814; --ink-2:#4a423a; --ink-3:#7a6f64;
-  --rule:#1a181418; --rule-strong:#1a181433;
-  --accent:#c8302a;
-  --good:#2c4a3e; --tint-good:#e3ebe2; --tint-warn:#f2e8d4; --warn:#a06a1f;
-  --max:900px;
-}
-* { box-sizing:border-box; }
-html { -webkit-text-size-adjust:100%; }
-body {
-  margin:0; background:var(--paper); color:var(--ink);
-  font:400 16px/1.62 var(--font-body);
-  font-feature-settings:"ss01" 1,"cv11" 1;
-  padding:0 clamp(20px,5vw,48px) 96px;
-}
-body::before {
-  content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
-  background-image:
-    radial-gradient(circle at 25% 15%, #fff9 0%, transparent 52%),
-    radial-gradient(circle at 75% 85%, #f1ead8aa 0%, transparent 52%);
-  mix-blend-mode:multiply; opacity:.6;
-}
-.wrap { max-width:var(--max); margin:0 auto; position:relative; z-index:1; }
-
-/* Masthead */
-header.top { padding:52px 0 0; }
-.masthead {
-  display:flex; justify-content:space-between; align-items:baseline; gap:16px; flex-wrap:wrap;
-  font:400 10.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
-  color:var(--ink-3); border-bottom:1px solid var(--rule-strong); padding-bottom:12px;
-}
-.masthead strong { color:var(--ink); font-weight:500; letter-spacing:.16em; }
-h1 {
-  font-family:var(--font-display); font-variation-settings:"opsz" 144,"SOFT" 80,"WONK" 1;
-  font-weight:400; font-size:clamp(34px,5.4vw,54px); line-height:1.03;
-  margin:34px 0 14px; letter-spacing:-.015em;
-}
-h1 .it { font-style:italic; color:var(--accent); }
-.lede { font-size:18px; line-height:1.58; color:var(--ink-2); max-width:60ch; margin:0 0 6px; }
-.prereq {
-  margin:26px 0 0; padding:14px 18px; background:var(--paper-2);
-  border-left:3px solid var(--ink); font-size:14.5px; color:var(--ink-2);
-}
-.prereq b { color:var(--ink); }
-
-/* Steps */
-.step { display:grid; grid-template-columns:52px 1fr; gap:0 22px; padding:38px 0 0; }
-.step + .step { border-top:1px solid var(--rule); margin-top:38px; }
-.step-num {
-  font-family:var(--font-display); font-style:italic; font-weight:400;
-  font-size:40px; line-height:1; color:var(--accent); opacity:.85;
-  font-variation-settings:"opsz" 48,"SOFT" 40,"WONK" 1;
-}
-.step h2 {
-  font-family:var(--font-display); font-weight:400; font-size:23px; line-height:1.2;
-  margin:2px 0 8px; letter-spacing:-.01em;
-  font-variation-settings:"opsz" 30,"SOFT" 50;
-}
-.step > div > p { margin:0 0 14px; color:var(--ink-2); font-size:15px; max-width:66ch; }
-.step > div > p:last-child { margin-bottom:0; }
-
-/* Command + output */
-.cmd, .out {
-  font:400 13px/1.65 var(--font-mono); white-space:pre; overflow-x:auto;
-  padding:13px 16px; margin:0 0 12px; border-radius:2px;
-}
-.cmd { background:var(--ink); color:#f3ede1; border-left:3px solid var(--accent); }
-.cmd .c { color:#8d8377; }
-.out {
-  background:var(--paper-2); color:var(--ink-2); border-left:3px solid var(--rule-strong);
-  font-size:12.5px;
-}
-.out-label, .caption {
-  font:400 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
-  color:var(--ink-3); display:block; margin:0 0 6px;
-}
-code {
-  font-family:var(--font-mono); font-size:.87em;
-  background:#1a18140f; padding:1px 5px; border-radius:2px;
-}
-a { color:var(--accent); text-decoration-thickness:1px; text-underline-offset:2px; }
-
-/* Callout */
-.callout {
-  border-left:3px solid var(--warn); background:var(--tint-warn);
-  padding:15px 20px; margin:16px 0 0; font-size:14.5px; color:var(--ink-2);
-}
-.callout.good { border-left-color:var(--good); background:var(--tint-good); }
-.callout .label {
-  font:400 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
-  color:var(--ink-3); display:block; margin-bottom:5px;
-}
-
-/* Troubleshooting */
-section.trouble { padding-top:56px; margin-top:48px; border-top:2px solid var(--ink); }
-section.trouble h2 {
-  font-family:var(--font-display); font-weight:400; font-size:27px; margin:0 0 6px;
-  font-variation-settings:"opsz" 36,"SOFT" 60;
-}
-section.trouble h2 .it { font-style:italic; color:var(--accent); }
-table { width:100%; border-collapse:collapse; font-size:13.5px; margin-top:22px; }
-thead th {
-  text-align:left; font:400 10px/1 var(--font-mono); letter-spacing:.14em;
-  text-transform:uppercase; color:var(--ink-3);
-  padding:0 14px 9px 0; border-bottom:1.5px solid var(--ink);
-}
-tbody td { padding:13px 14px 13px 0; border-bottom:1px solid var(--rule); vertical-align:top; color:var(--ink-2); }
-tbody td:first-child { color:var(--ink); width:31%; }
-tbody tr:hover { background:#00000005; }
-
-abbr[title] {
-  text-decoration:underline dotted #1a181466; text-underline-offset:3px;
-  cursor:help; border:0;
-}
-abbr[title]:hover { text-decoration-color:var(--accent); }
-
-footer {
-  margin-top:56px; padding-top:18px; border-top:1px solid var(--rule-strong);
-  font:400 11px/1.7 var(--font-mono); letter-spacing:.06em; color:var(--ink-3);
-  display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
-}
-
-@media (max-width:640px) {
-  .step { grid-template-columns:1fr; gap:0; }
-  .step-num { font-size:30px; margin-bottom:6px; }
-  tbody td:first-child { width:auto; }
-}
-@media print {
-  body { background:#fff; padding:0; }
-  body::before { display:none; }
-  .cmd { background:#f2f2f2; color:#111; }
-  .step { page-break-inside:avoid; }
-}
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@300..600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/docs.css">
+<script>
+  // Set before paint so the page never flashes the wrong theme.
+  try {
+    var t = localStorage.getItem('a2w-theme');
+    document.documentElement.dataset.theme =
+      t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  } catch (e) {}
+</script>
 </head>
 <body>
-<div class="wrap">
+<button class="menu-btn" aria-expanded="false">☰ Menu</button>
+<div class="layout">
+  <aside class="sidebar">
+    <a class="brand" href="index.html"><span class="dot"></span>agent2web</a>
+    <div class="nav-group">Guides</div>
+      <a class="nav-link" href="index.html">Overview</a>
+      <a class="nav-link" href="deploying.html">Deploying</a>
+      <a class="nav-link" href="local-testing.html" aria-current="page">Testing it locally</a>
+    <div class="nav-group">Project</div>
+      <a class="nav-link" href="https://github.com/raveli/agent2web">Source on GitHub</a>
+      <a class="nav-link" href="https://github.com/raveli/agent2web/issues">Issues</a>
+    <div class="sidebar-foot">
+      <a href="https://github.com/raveli/agent2web">MIT</a>
+      <button class="theme-toggle" type="button" aria-label="Toggle colour theme">Dark</button>
+    </div>
+  </aside>
+  <main class="content">
+    <article>
 
-<header class="top">
-  <div class="masthead">
-    <span><strong>agent2web</strong> · Runbook</span>
-    <span>Local testing · Cloudflare Workers · Node 22</span>
-  </div>
-  <h1>Running it <span class="it">on your laptop.</span></h1>
-  <p class="lede">
+  <h1>Testing agent2web locally</h1>
+  <p class="subtitle">
     The test suite and <code>wrangler dev</code> both run the real Worker locally, with local D1
     and R2 — no Cloudflare account needed until you deploy. Everything except the Claude web
     connector can be exercised this way, including the full
@@ -168,14 +51,12 @@ footer {
     account, no Docker, no DNS. Local D1 and R2 state lands in <code>.wrangler/</code>,
     which is gitignored.
   </p>
-</header>
 
-<main>
 
 <div class="step">
   <div class="step-num">01</div>
   <div>
-    <h2>Install and run the test suite</h2>
+    <h2 id="install-and-run-the-test-suite">Install and run the test suite</h2>
     <p>The suite bundles the Worker exactly as <code>wrangler</code> does for deploy, boots it in
     Miniflare with local D1 and R2 bindings, and talks to it over HTTP. A clean pass means the
     deployed code path works, not merely that some in-process stand-in does.</p>
@@ -191,7 +72,7 @@ npm test</div>
 <div class="step">
   <div class="step-num">02</div>
   <div>
-    <h2>Generate secrets for local dev</h2>
+    <h2 id="generate-secrets-for-local-dev">Generate secrets for local dev</h2>
     <p>Save the admin password it prints — it is stored nowhere else.</p>
     <div class="cmd">npm run gen-secrets
 cp .dev.vars.example .dev.vars     <span class="c"># then paste the values in</span></div>
@@ -209,7 +90,7 @@ cp .dev.vars.example .dev.vars     <span class="c"># then paste the values in</s
 <div class="step">
   <div class="step-num">03</div>
   <div>
-    <h2>Run the Worker</h2>
+    <h2 id="run-the-worker">Run the Worker</h2>
     <div class="cmd">npm run dev</div>
     <span class="out-label">Expect</span>
     <div class="out">[wrangler:info] Ready on http://localhost:8787</div>
@@ -223,7 +104,7 @@ cp .dev.vars.example .dev.vars     <span class="c"># then paste the values in</s
 <div class="step">
   <div class="step-num">04</div>
   <div>
-    <h2>Publish a page</h2>
+    <h2 id="publish-a-page">Publish a page</h2>
     <p>This is the same call Claude makes. Export <code>A2W_API_TOKEN</code> from your
     <code>.dev.vars</code> first.</p>
     <div class="cmd">curl -s localhost:8787/mcp \
@@ -257,7 +138,7 @@ Content-Security-Policy: sandbox allow-scripts allow-forms allow-popups …</div
 <div class="step">
   <div class="step-num">05</div>
   <div>
-    <h2>Password-protect it, and open the admin UI</h2>
+    <h2 id="password-protect-it-and-open-the-admin-ui">Password-protect it, and open the admin UI</h2>
     <div class="cmd">curl -s localhost:8787/mcp \
   -H "authorization: Bearer $A2W_API_TOKEN" \
   -H 'content-type: application/json' \
@@ -281,7 +162,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -u :open-sesame localhost:8787/s/hello/
 <div class="step">
   <div class="step-num">06</div>
   <div>
-    <h2>Connect a real client</h2>
+    <h2 id="connect-a-real-client">Connect a real client</h2>
     <p>Both credentials work locally. The static token skips the browser; the
     <abbr title="OAuth 2.1 — the authorization flow Claude's connectors require">OAuth</abbr>
     flow uses a loopback callback, which the redirect policy allows on any port.</p>
@@ -300,11 +181,11 @@ claude mcp add --transport http a2w-local http://localhost:8787/mcp \
   </div>
 </div>
 
-</main>
 
-<section class="trouble">
-  <h2>When it <span class="it">misbehaves.</span></h2>
-  <p class="lede" style="font-size:15px; margin-top:8px;">Every row here is a failure we actually
+
+<section>
+  <h2 id="troubleshooting">Troubleshooting</h2>
+  <p class="subtitle" style="font-size:15px; margin-top:8px;">Every row here is a failure we actually
   hit while building this, with the symptom that showed up first.</p>
   <table>
     <thead>
@@ -358,11 +239,10 @@ claude mcp add --transport http a2w-local http://localhost:8787/mcp \
   </table>
 </section>
 
-<footer>
-  <span>agent2web · docs/local-testing.html</span>
-  <span>Hover dotted terms for definitions</span>
-</footer>
-
+    </article>
+  </main>
+  <nav class="toc" aria-label="On this page"><div class="toc-title">On this page</div></nav>
 </div>
+<script src="assets/docs.js"></script>
 </body>
 </html>

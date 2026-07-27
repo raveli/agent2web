@@ -1,179 +1,45 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>agent2web · Deploying</title>
+<meta name="description" content="Both routes, plus running it locally, connecting Claude, domains and costs.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..900,0..100,0..1;1,9..144,300..900,0..100,0..1&family=Geist:wght@300..700&family=JetBrains+Mono:wght@300..600&display=swap" rel="stylesheet">
-<style>
-:root {
-  --font-display:'Fraunces', Georgia, serif;
-  --font-body:'Geist', -apple-system, sans-serif;
-  --font-mono:'JetBrains Mono', ui-monospace, Menlo, monospace;
-  --paper:#f7f2e8; --paper-2:#f1ead8;
-  --ink:#1a1814; --ink-2:#4a423a; --ink-3:#7a6f64;
-  --rule:#1a181418; --rule-strong:#1a181433;
-  --accent:#c8302a;
-  --good:#2c4a3e; --tint-good:#e3ebe2; --tint-warn:#f2e8d4; --warn:#a06a1f;
-  --max:900px;
-}
-* { box-sizing:border-box; }
-html { -webkit-text-size-adjust:100%; scroll-behavior:smooth; }
-body {
-  margin:0; background:var(--paper); color:var(--ink);
-  font:400 16px/1.62 var(--font-body);
-  font-feature-settings:"ss01" 1,"cv11" 1;
-  padding:0 clamp(20px,5vw,48px) 96px;
-}
-body::before {
-  content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
-  background-image:
-    radial-gradient(circle at 25% 15%, #fff9 0%, transparent 52%),
-    radial-gradient(circle at 75% 85%, #f1ead8aa 0%, transparent 52%);
-  mix-blend-mode:multiply; opacity:.6;
-}
-.wrap { max-width:var(--max); margin:0 auto; position:relative; z-index:1; }
-
-header.top { padding:52px 0 0; }
-.masthead {
-  display:flex; justify-content:space-between; align-items:baseline; gap:16px; flex-wrap:wrap;
-  font:400 10.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
-  color:var(--ink-3); border-bottom:1px solid var(--rule-strong); padding-bottom:12px;
-}
-.masthead strong { color:var(--ink); font-weight:500; letter-spacing:.16em; }
-h1 {
-  font-family:var(--font-display); font-variation-settings:"opsz" 144,"SOFT" 80,"WONK" 1;
-  font-weight:400; font-size:clamp(34px,5.4vw,54px); line-height:1.03;
-  margin:34px 0 14px; letter-spacing:-.015em;
-}
-h1 .it { font-style:italic; color:var(--accent); }
-.lede { font-size:18px; line-height:1.58; color:var(--ink-2); max-width:60ch; margin:0 0 6px; }
-.prereq {
-  margin:26px 0 0; padding:14px 18px; background:var(--paper-2);
-  border-left:3px solid var(--ink); font-size:14.5px; color:var(--ink-2);
-}
-.prereq b { color:var(--ink); }
-
-/* Route chooser */
-.routes { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:30px 0 0; }
-.route {
-  border:1px solid var(--rule-strong); padding:18px 20px; background:var(--paper-2);
-  position:relative;
-}
-.route h3 {
-  font-family:var(--font-display); font-weight:400; font-size:19px; margin:0 0 6px;
-  font-variation-settings:"opsz" 24,"SOFT" 50;
-}
-.route p { margin:0 0 10px; font-size:14px; color:var(--ink-2); }
-.route .who { font:400 10px/1.5 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3); display:block; margin-bottom:8px; }
-.route a { font-size:14px; }
-
-section.part { padding-top:56px; margin-top:44px; border-top:2px solid var(--ink); }
-section.part > h2 {
-  font-family:var(--font-display); font-weight:400; font-size:29px; margin:0 0 6px;
-  font-variation-settings:"opsz" 36,"SOFT" 60;
-}
-section.part > h2 .it { font-style:italic; color:var(--accent); }
-section.part > .deck { font-size:16px; color:var(--ink-2); max-width:62ch; margin:0 0 8px; }
-
-.step { display:grid; grid-template-columns:52px 1fr; gap:0 22px; padding:34px 0 0; }
-.step + .step { border-top:1px solid var(--rule); margin-top:34px; }
-.step-num {
-  font-family:var(--font-display); font-style:italic; font-weight:400;
-  font-size:40px; line-height:1; color:var(--accent); opacity:.85;
-  font-variation-settings:"opsz" 48,"SOFT" 40,"WONK" 1;
-}
-.step h3 {
-  font-family:var(--font-display); font-weight:400; font-size:22px; line-height:1.2;
-  margin:2px 0 8px; letter-spacing:-.01em;
-  font-variation-settings:"opsz" 30,"SOFT" 50;
-}
-.step > div > p { margin:0 0 14px; color:var(--ink-2); font-size:15px; max-width:66ch; }
-.step > div > p:last-child { margin-bottom:0; }
-
-.cmd, .out {
-  font:400 13px/1.65 var(--font-mono); white-space:pre; overflow-x:auto;
-  padding:13px 16px; margin:0 0 12px; border-radius:2px;
-}
-.cmd { background:var(--ink); color:#f3ede1; border-left:3px solid var(--accent); }
-.cmd .c { color:#8d8377; }
-.out {
-  background:var(--paper-2); color:var(--ink-2); border-left:3px solid var(--rule-strong);
-  font-size:12.5px;
-}
-.out-label {
-  font:400 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
-  color:var(--ink-3); display:block; margin:0 0 6px;
-}
-code {
-  font-family:var(--font-mono); font-size:.87em;
-  background:#1a18140f; padding:1px 5px; border-radius:2px;
-}
-a { color:var(--accent); text-decoration-thickness:1px; text-underline-offset:2px; }
-
-.callout {
-  border-left:3px solid var(--warn); background:var(--tint-warn);
-  padding:15px 20px; margin:16px 0 0; font-size:14.5px; color:var(--ink-2);
-}
-.callout.good { border-left-color:var(--good); background:var(--tint-good); }
-.callout.hard { border-left-color:var(--accent); background:#f2e0e0; }
-.callout .label {
-  font:400 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
-  color:var(--ink-3); display:block; margin-bottom:5px;
-}
-
-table { width:100%; border-collapse:collapse; font-size:13.5px; margin-top:20px; }
-thead th {
-  text-align:left; font:400 10px/1 var(--font-mono); letter-spacing:.14em;
-  text-transform:uppercase; color:var(--ink-3);
-  padding:0 14px 9px 0; border-bottom:1.5px solid var(--ink);
-}
-tbody td { padding:12px 14px 12px 0; border-bottom:1px solid var(--rule); vertical-align:top; color:var(--ink-2); }
-tbody td:first-child { color:var(--ink); }
-tbody tr:hover { background:#00000005; }
-.mono-cell { font-family:var(--font-mono); font-size:12px; }
-
-abbr[title] {
-  text-decoration:underline dotted #1a181466; text-underline-offset:3px;
-  cursor:help; border:0;
-}
-abbr[title]:hover { text-decoration-color:var(--accent); }
-
-.verified { font:400 10px/1 var(--font-mono); letter-spacing:.12em; text-transform:uppercase;
-  padding:3px 7px; border:1px solid var(--rule-strong); color:var(--ink-3); white-space:nowrap; }
-.verified.no { border-color:var(--accent); color:var(--accent); }
-
-footer {
-  margin-top:56px; padding-top:18px; border-top:1px solid var(--rule-strong);
-  font:400 11px/1.7 var(--font-mono); letter-spacing:.06em; color:var(--ink-3);
-  display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
-}
-
-@media (max-width:640px) {
-  .routes { grid-template-columns:1fr; }
-  .step { grid-template-columns:1fr; gap:0; }
-  .step-num { font-size:30px; margin-bottom:6px; }
-}
-@media print {
-  body { background:#fff; padding:0; }
-  body::before { display:none; }
-  .cmd { background:#f2f2f2; color:#111; }
-  .step, .route { page-break-inside:avoid; }
-}
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@300..600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/docs.css">
+<script>
+  // Set before paint so the page never flashes the wrong theme.
+  try {
+    var t = localStorage.getItem('a2w-theme');
+    document.documentElement.dataset.theme =
+      t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  } catch (e) {}
+</script>
 </head>
 <body>
-<div class="wrap">
+<button class="menu-btn" aria-expanded="false">☰ Menu</button>
+<div class="layout">
+  <aside class="sidebar">
+    <a class="brand" href="index.html"><span class="dot"></span>agent2web</a>
+    <div class="nav-group">Guides</div>
+      <a class="nav-link" href="index.html">Overview</a>
+      <a class="nav-link" href="deploying.html" aria-current="page">Deploying</a>
+      <a class="nav-link" href="local-testing.html">Testing it locally</a>
+    <div class="nav-group">Project</div>
+      <a class="nav-link" href="https://github.com/raveli/agent2web">Source on GitHub</a>
+      <a class="nav-link" href="https://github.com/raveli/agent2web/issues">Issues</a>
+    <div class="sidebar-foot">
+      <a href="https://github.com/raveli/agent2web">MIT</a>
+      <button class="theme-toggle" type="button" aria-label="Toggle colour theme">Dark</button>
+    </div>
+  </aside>
+  <main class="content">
+    <article>
 
-<header class="top">
-  <div class="masthead">
-    <span><strong>agent2web</strong> · Runbook</span>
-    <span>Deploying · Cloudflare Workers</span>
-  </div>
-  <h1>From your laptop <span class="it">to the internet.</span></h1>
-  <p class="lede">
+  <h1>Deploying agent2web</h1>
+  <p class="subtitle">
     agent2web runs on Cloudflare Workers with D1 for metadata and R2 for the files. There is no
     server to maintain and nothing to keep patched. Run it locally first — that part needs no
     Cloudflare account at all — then deploy either from a browser or from the terminal.
@@ -184,37 +50,33 @@ footer {
     plan is for CPU time, not scale — see <a href="#why-paid">why</a>.
   </p>
 
-  <div class="routes">
-    <div class="route">
+  <div class="cards">
+    <a class="card" href="#browser">
       <span class="who">If you want it working in five minutes</span>
       <h3>Deploy from the browser</h3>
       <p>One button. Cloudflare clones the repo, creates the database and bucket, and sets up
-      automatic redeploys on every push.</p>
-      <a href="#browser">Jump to the button route →</a>
-    </div>
-    <div class="route">
+      automatic redeploys on every push. <span style="color:var(--accent)">Jump to it &rarr;</span></p>
+    </a>
+    <a class="card" href="#terminal">
       <span class="who">If you want to see every step</span>
       <h3>Deploy from the terminal</h3>
       <p>Six <code>wrangler</code> commands. Slower, but nothing is hidden and it is the same path
-      you will use for later changes.</p>
-      <a href="#terminal">Jump to the CLI route →</a>
-    </div>
+      you will use for later changes. <span style="color:var(--accent)">Jump to it &rarr;</span></p>
+    </a>
   </div>
-</header>
 
-<main>
 
 <!-- ============================================ LOCAL -->
-<section class="part" id="local">
-  <h2>First, run it <span class="it">locally.</span></h2>
-  <p class="deck">Worth doing even if you intend to deploy immediately: it proves the build works on
+<section id="local">
+  <h2 id="run-it-locally-first">Run it locally first</h2>
+  <p class="subtitle">Worth doing even if you intend to deploy immediately: it proves the build works on
   your machine, and it is where you will do all subsequent development. No Cloudflare account is
   involved — D1 and R2 are emulated on disk.</p>
 
   <div class="step">
     <div class="step-num">01</div>
     <div>
-      <h3>Install and run the tests</h3>
+      <h3 id="install-and-run-the-tests">Install and run the tests</h3>
       <div class="cmd">git clone https://github.com/raveli/agent2web &amp;&amp; cd agent2web
 npm install
 npm test</div>
@@ -230,7 +92,7 @@ npm test</div>
   <div class="step">
     <div class="step-num">02</div>
     <div>
-      <h3>Create local secrets and start it</h3>
+      <h3 id="create-local-secrets-and-start-it">Create local secrets and start it</h3>
       <div class="cmd">npm run gen-secrets              <span class="c"># save the admin password it prints</span>
 cp .dev.vars.example .dev.vars   <span class="c"># paste the values in</span>
 npm run dev</div>
@@ -257,15 +119,15 @@ open http://localhost:8787/admin          <span class="c"># sign in with the adm
 </section>
 
 <!-- ============================================ BROWSER -->
-<section class="part" id="browser">
-  <h2>Deploy from <span class="it">the browser.</span></h2>
-  <p class="deck">The button reads <code>wrangler.jsonc</code>, provisions what it declares, and
+<section id="browser">
+  <h2 id="deploy-from-the-browser">Deploy from the browser</h2>
+  <p class="subtitle">The button reads <code>wrangler.jsonc</code>, provisions what it declares, and
   connects Workers Builds so every push to your copy redeploys.</p>
 
   <div class="step">
     <div class="step-num">01</div>
     <div>
-      <h3>Generate your secrets first</h3>
+      <h3 id="generate-your-secrets-first">Generate your secrets first</h3>
       <p>The setup flow asks for them, so have them ready. Run this locally:</p>
       <div class="cmd">npm install &amp;&amp; npm run gen-secrets</div>
       <span class="out-label">Prints</span>
@@ -285,7 +147,7 @@ A2W_ADMIN_PASSWORD_HASH=pbkdf2.600000.…
   <div class="step">
     <div class="step-num">02</div>
     <div>
-      <h3>Press the button</h3>
+      <h3 id="press-the-button">Press the button</h3>
       <p>From the <a href="https://github.com/raveli/agent2web">repository README</a>, or directly:</p>
       <div class="cmd">https://deploy.workers.cloudflare.com/?url=https://github.com/raveli/agent2web</div>
       <p>Cloudflare clones the repo into your GitHub account, then provisions the two resources
@@ -305,7 +167,7 @@ A2W_ADMIN_PASSWORD_HASH=pbkdf2.600000.…
   <div class="step">
     <div class="step-num">03</div>
     <div>
-      <h3>Set <code>A2W_PUBLIC_URL</code> to the real URL</h3>
+      <h3 id="set-a2w-public-url-to-the-real-url">Set <code>A2W_PUBLIC_URL</code> to the real URL</h3>
       <p>This is the one step that is easy to skip and breaks things quietly. The Worker ships with
       a placeholder pointing at localhost.</p>
       <p>Dashboard → your Worker → <b>Settings</b> → <b>Variables and Secrets</b> → set
@@ -324,7 +186,7 @@ A2W_ADMIN_PASSWORD_HASH=pbkdf2.600000.…
   <div class="step">
     <div class="step-num">04</div>
     <div>
-      <h3>Check it came up</h3>
+      <h3 id="check-it-came-up">Check it came up</h3>
       <div class="cmd">curl -s https://agent2web.&lt;your-subdomain&gt;.workers.dev/healthz</div>
       <span class="out-label">Expect</span>
       <div class="out">{"status":"ok","sites":0,"version":"0.1.0"}</div>
@@ -336,15 +198,15 @@ A2W_ADMIN_PASSWORD_HASH=pbkdf2.600000.…
 </section>
 
 <!-- ============================================ TERMINAL -->
-<section class="part" id="terminal">
-  <h2>Deploy from <span class="it">the terminal.</span></h2>
-  <p class="deck">Same result, nothing hidden. This is also how you deploy later changes if you
+<section id="terminal">
+  <h2 id="deploy-from-the-terminal">Deploy from the terminal</h2>
+  <p class="subtitle">Same result, nothing hidden. This is also how you deploy later changes if you
   would rather not push to deploy.</p>
 
   <div class="step">
     <div class="step-num">01</div>
     <div>
-      <h3>Log in and create the two resources</h3>
+      <h3 id="log-in-and-create-the-two-resources">Log in and create the two resources</h3>
       <div class="cmd">npx wrangler login
 
 npx wrangler d1 create agent2web
@@ -360,7 +222,7 @@ npx wrangler r2 bucket create agent2web-sites</div>
   <div class="step">
     <div class="step-num">02</div>
     <div>
-      <h3>Set the public URL, then the secrets</h3>
+      <h3 id="set-the-public-url-then-the-secrets">Set the public URL, then the secrets</h3>
       <p>Edit <code>vars.A2W_PUBLIC_URL</code> in <code>wrangler.jsonc</code> to the origin you will
       dial. If you do not know it yet, deploy once, read the URL wrangler prints, then set it and
       deploy again.</p>
@@ -377,7 +239,7 @@ npx wrangler secret put A2W_API_TOKEN            <span class="c"># optional</spa
   <div class="step">
     <div class="step-num">03</div>
     <div>
-      <h3>Deploy</h3>
+      <h3 id="deploy">Deploy</h3>
       <div class="cmd">npx wrangler deploy --dry-run    <span class="c"># check the config resolves, no upload</span>
 npm run deploy</div>
       <span class="out-label">The dry run prints what it will do</span>
@@ -393,13 +255,13 @@ Your Worker has access to the following bindings:
 </section>
 
 <!-- ============================================ CONNECT -->
-<section class="part" id="connect">
-  <h2>Connect <span class="it">Claude.</span></h2>
+<section id="connect">
+  <h2 id="connect-claude">Connect Claude</h2>
 
   <div class="step">
     <div class="step-num">01</div>
     <div>
-      <h3>Claude web or desktop</h3>
+      <h3 id="claude-web-or-desktop">Claude web or desktop</h3>
       <p>Settings → Connectors → <b>Add custom connector</b>, with the URL:</p>
       <div class="out">https://&lt;your-worker&gt;/mcp</div>
       <p>Claude registers itself, then sends you to <em>your</em> sign-in page. Enter the admin
@@ -418,7 +280,7 @@ Your Worker has access to the following bindings:
   <div class="step">
     <div class="step-num">02</div>
     <div>
-      <h3>Claude Code</h3>
+      <h3 id="claude-code">Claude Code</h3>
       <div class="cmd">claude mcp add --transport http agent2web https://&lt;your-worker&gt;/mcp
 
 <span class="c"># or skip the browser entirely with the static token:</span>
@@ -430,9 +292,9 @@ claude mcp add --transport http agent2web https://&lt;your-worker&gt;/mcp \
 </section>
 
 <!-- ============================================ DOMAINS -->
-<section class="part" id="domains">
-  <h2>Your own <span class="it">domain.</span></h2>
-  <p class="deck">Optional. Path URLs work from the moment you deploy; this is about prettier
+<section id="domains">
+  <h2 id="your-own-domain">Your own domain</h2>
+  <p class="subtitle">Optional. Path URLs work from the moment you deploy; this is about prettier
   addresses and, for subdomains, giving each site its own browser origin.</p>
 
   <table>
@@ -463,7 +325,7 @@ claude mcp add --transport http agent2web https://&lt;your-worker&gt;/mcp \
   <div class="step">
     <div class="step-num">01</div>
     <div>
-      <h3>Subdomain hosting</h3>
+      <h3 id="subdomain-hosting">Subdomain hosting</h3>
       <p>Three things, all in the Cloudflare dashboard for a domain you have added:</p>
       <div class="out">1. DNS      → a proxied (orange cloud) record for  *.sites.example.com
 2. Worker   → Settings → Domains &amp; Routes → add route  *.sites.example.com/*
@@ -481,7 +343,7 @@ claude mcp add --transport http agent2web https://&lt;your-worker&gt;/mcp \
   <div class="step">
     <div class="step-num">02</div>
     <div>
-      <h3>A custom domain for one site</h3>
+      <h3 id="a-custom-domain-for-one-site">A custom domain for one site</h3>
       <div class="cmd"><span class="c"># from Claude, or any MCP client</span>
 site_set_domain(slug: "quarterly", domain: "reports.customer.example")</div>
       <p>The Worker answers for that hostname immediately; DNS and the certificate are yours to
@@ -491,10 +353,10 @@ site_set_domain(slug: "quarterly", domain: "reports.customer.example")</div>
 </section>
 
 <!-- ============================================ COSTS -->
-<section class="part" id="why-paid">
-  <h2>Why the paid plan, <span class="it">and what it costs.</span></h2>
+<section id="why-paid">
+  <h2 id="plan-requirements-and-cost">Plan requirements and cost</h2>
 
-  <p class="deck">The $5/mo Workers Paid plan is required for <b>CPU time per request</b>, not for
+  <p class="subtitle">The $5/mo Workers Paid plan is required for <b>CPU time per request</b>, not for
   traffic. Password hashing is PBKDF2-SHA256 at 600,000 iterations, which measures about 130 ms.
   The Free plan caps a request at 10 ms of CPU — enough for roughly 40,000 iterations, an order of
   magnitude below current guidance. Rather than weaken the hash, agent2web asks for the paid plan.</p>
@@ -524,8 +386,8 @@ site_set_domain(slug: "quarterly", domain: "reports.customer.example")</div>
 </section>
 
 <!-- ============================================ TROUBLE -->
-<section class="part" id="trouble">
-  <h2>When it <span class="it">misbehaves.</span></h2>
+<section id="trouble">
+  <h2 id="troubleshooting">Troubleshooting</h2>
 
   <table>
     <thead><tr><th>Symptom</th><th>Cause and fix</th></tr></thead>
@@ -574,9 +436,9 @@ site_set_domain(slug: "quarterly", domain: "reports.customer.example")</div>
 </section>
 
 <!-- ============================================ HONESTY -->
-<section class="part" id="verified">
-  <h2>What here is <span class="it">actually verified.</span></h2>
-  <p class="deck">This guide was written alongside the port, and not all of it has been exercised
+<section id="verified">
+  <h2 id="what-is-verified-and-what-is-not">What is verified, and what is not</h2>
+  <p class="subtitle">This guide was written alongside the port, and not all of it has been exercised
   against a live Cloudflare account. Where it has not, that is said rather than implied.</p>
 
   <table>
@@ -598,13 +460,12 @@ site_set_domain(slug: "quarterly", domain: "reports.customer.example")</div>
   would put the hash at 200–260 ms — still under 1% of the 30-second budget.</p>
 </section>
 
-</main>
 
-<footer>
-  <span>agent2web · docs/deploying.html</span>
-  <span>Hover dotted terms for definitions</span>
-</footer>
 
+    </article>
+  </main>
+  <nav class="toc" aria-label="On this page"><div class="toc-title">On this page</div></nav>
 </div>
+<script src="assets/docs.js"></script>
 </body>
 </html>
