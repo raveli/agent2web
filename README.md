@@ -1,24 +1,40 @@
 # agent2web
 
-Hosting for static HTML, with an MCP server so AI tools can publish to it
-directly. Claude builds a page, calls one tool, and you get a URL.
+**Somewhere for Claude to put the HTML it just wrote.**
 
-Runs on Cloudflare Workers, D1 and R2 — no server to maintain, and deployable
-from a browser in a few clicks.
+AI tools produce self-contained pages all day — dashboards, reports, prototypes —
+and then there is nowhere to put them. agent2web is a personal static host with an
+MCP server attached: Claude calls one tool and hands you back a URL.
 
-- **MCP endpoint** at `/mcp` (streamable HTTP) with eleven `site_*` tools
-- **Static hosting** at `https://your-worker/s/<slug>/`, optionally also at
-  `https://<slug>.sites.example.com/` and at a per-site custom domain
-- **Password protection** per site, plus public/disabled
-- **Versioning**: every publish is a new immutable version; roll back at will
-- **Owner-only publishing**: built-in OAuth 2.1 server (what Claude web uses) and
-  a static bearer token (what Claude Code and CI use)
-- **Admin UI** for the things a chat window is bad at: revoking access, deleting
+Runs on Cloudflare Workers, D1 and R2. No server, no volume, no certificates to
+renew.
+
+```
+You:     turn that into a page I can send my team
+Claude:  [ site_publish ]  →  https://a2w.example.com/s/q3-report/
+```
+
+Ask for a change, it republishes to the same URL and keeps the old version.
+
+<p align="center">
+  <img src="docs/images/admin-sites-light.png#gh-light-mode-only" alt="The agent2web admin UI listing four published sites with their access state, version count, size and last published date" width="820">
+  <img src="docs/images/admin-sites-dark.png#gh-dark-mode-only" alt="The agent2web admin UI listing four published sites with their access state, version count, size and last published date" width="820">
+</p>
+
+## What you get
+
+- **Eleven `site_*` MCP tools** over streamable HTTP — publish, update single
+  files, read back, rename, roll back, delete
+- **Password-protect any site**, or disable it, without touching the files
+- **Every publish is a new version.** Roll back from the admin UI or a tool call
+- **Only you can publish.** Built-in OAuth 2.1 server for Claude web, plus a
+  bearer token for Claude Code and CI
+- **Three URL shapes**: `/s/<slug>/` always, `<slug>.yourdomain.com` with a
+  wildcard record, and a custom domain per site
+- **An admin UI** for what a chat window is bad at: revoking a connection,
+  deleting something, seeing what is live
 
 ## Deploy
-
-Full guide with both routes, costs and troubleshooting:
-**[docs/deploying.html](docs/deploying.html)**.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/raveli/agent2web)
 
@@ -37,6 +53,10 @@ After the first deploy, set **`A2W_PUBLIC_URL`** to the Worker's real URL
 (Settings → Variables). It is the OAuth issuer and the audience of every token
 issued, so a mismatch breaks the Claude connector rather than merely looking
 untidy.
+
+**Full guide**, with the terminal route, costs and troubleshooting:
+[docs/deploying.html](docs/deploying.html) — an HTML file, so download it or
+[read it rendered](https://raveli.github.io/agent2web/deploying.html).
 
 ### Requires the Workers Paid plan ($5/mo)
 
@@ -99,7 +119,8 @@ Default limits: 200 files, 5 MB per file, 25 MB per site, 10 versions retained.
 
 ## Local development
 
-Full walkthrough in [docs/local-testing.html](docs/local-testing.html). In short:
+Full walkthrough in [docs/local-testing.html](docs/local-testing.html)
+([rendered](https://raveli.github.io/agent2web/local-testing.html)). In short:
 
 ```bash
 npm install
@@ -183,6 +204,15 @@ Objects in R2 are keyed `sites/<site-id>/<version-id>/<path>`, so a bucket
 listing is readable. Publishing writes every object first, then moves
 `current_version_id` in a single D1 `batch()` — a reader never sees a
 half-published site.
+
+## Status
+
+Working and tested, but young — first released July 2026, and not yet running
+anywhere long enough to have been surprised by it. The suite boots the real
+Worker in Miniflare with local D1 and R2 and drives it over HTTP, so a green run
+exercises the code path that deploys rather than a stand-in.
+
+Issues and pull requests welcome.
 
 ## License
 
