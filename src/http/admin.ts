@@ -20,6 +20,7 @@ import {
 } from '../core/views/admin.js';
 import { messageFor } from '../util/errors.js';
 import { clientIp, cookie, getCookie, html, isSecure } from './hosting.js';
+import { rememberPublicUrl } from '../public-url.js';
 
 /** Shape the connections view needs; the row itself lives in D1. */
 export type OAuthClientRow = {
@@ -54,6 +55,9 @@ export function adminRoutes(): Hono<Env> {
     if (!outcome.ok) return html(adminLoginPage(config, outcome.error, next), outcome.status);
 
     const id = await createAdminSession(sql, crypto, config, 'admin-ui');
+    // The owner reached us on this origin, so it is safe to record as the
+    // canonical one. Anonymous requests never get to do this.
+    c.executionCtx.waitUntil(rememberPublicUrl(sql, c.req.url));
     return new Response(null, {
       status: 303,
       headers: {

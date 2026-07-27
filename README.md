@@ -49,11 +49,11 @@ npm install && npm run gen-secrets
 That prints `A2W_SECRET`, an optional `A2W_API_TOKEN`, and a password hash. Save
 the admin password it shows; it is stored nowhere else.
 
-**Leave `A2W_PUBLIC_URL` and `A2W_SITES_BASE_DOMAIN` empty.** Nobody can know
-their Worker's URL before deploying it, so the Worker learns its own address from
-the first request and remembers it. You only set `A2W_PUBLIC_URL` later, when you
-attach a custom domain — it is the OAuth issuer and the audience of every token
-issued, so at that point it has to match exactly.
+The form asks only for those secrets and a size limit. There is no URL to enter:
+the Worker records the origin you reach it on the first time you sign in to
+`/admin` or call `/mcp` with your token. Add `A2W_PUBLIC_URL` later, in Settings →
+Variables, when you attach a custom domain — it is the OAuth issuer and the
+audience of every token issued, so from then on it must match exactly.
 
 **Full guide**, with the terminal route, costs and troubleshooting:
 [docs/deploying.html](docs/deploying.html) — an HTML file, so download it or
@@ -176,7 +176,7 @@ Set as **vars** in `wrangler.jsonc`:
 | Var | Default | Meaning |
 | --- | --- | --- |
 | `A2W_PUBLIC_URL` | learned on first request | The Worker's public origin. OAuth issuer and token audience. Leave unset on a fresh deploy; set it exactly (no path, no trailing slash) when you attach a custom domain. |
-| `A2W_SITES_BASE_DOMAIN` | unset | Enables `<slug>.<domain>` hosting. Needs wildcard DNS; impossible on workers.dev. |
+| `A2W_SITES_BASE_DOMAIN` | unset | Enables `<slug>.<domain>` hosting. Add it in Settings → Variables once you have a domain with a proxied wildcard record; impossible on workers.dev. |
 | `A2W_SITES_PATH_PREFIX` | `/s` | Prefix for path-based hosting. |
 | `A2W_SITE_SANDBOX` | `auto` | `auto` sandboxes only same-origin site content; `always` / `never` override. |
 | `A2W_MAX_FILE_BYTES` | `5242880` | Per-file limit. |

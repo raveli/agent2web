@@ -6,6 +6,7 @@ import { purgeOAuth } from './oauth.js';
 import { purgeAttempts } from './core/throttle.js';
 import { Sql } from './d1.js';
 import { createApp, type Bindings } from './http/app.js';
+import { readPublicUrl } from './public-url.js';
 
 /**
  * The Worker entry point.
@@ -18,6 +19,7 @@ import { createApp, type Bindings } from './http/app.js';
 let cached: { app: ReturnType<typeof createApp>; config: Config } | undefined;
 let migrated: Promise<unknown> | undefined;
 let configError: string | undefined;
+let warnedUnsettled = false;
 
 const crypto = new WebCryptoProvider();
 
@@ -33,7 +35,16 @@ export default {
 
     let publicUrl: string;
     try {
-      publicUrl = await resolvePublicUrl(sql, env, request);
+      const resolved = await readPublicUrl(sql, env.A2W_PUBLIC_URL as string | undefined, request);
+      publicUrl = resolved.url;
+      if (!resolved.settled && !warnedUnsettled) {
+        warnedUnsettled = true;
+        console.warn(
+          '[config] A2W_PUBLIC_URL is not set and no origin has been recorded yet. ' +
+            'Using this request\'s origin provisionally; it is recorded the first time ' +
+            'someone signs in to /admin or calls /mcp with a valid token.',
+        );
+      }
     } catch (err) {
       console.error('[boot] could not determine the public URL', err);
       return plain('Failed to start: see the Worker logs.', 500);
@@ -73,47 +84,6 @@ export default {
   },
 };
 
-/**
- * The origin this deployment answers on.
- *
- * Nobody can know their Worker's URL before deploying it, so requiring it up
- * front made the setup form ask a question with no answer. When it is not set,
- * the first request teaches the Worker its own address and that is remembered.
- *
- * It has to be remembered rather than read per request: it is the OAuth issuer
- * and the audience of every token issued, and it is also how the router tells
- * "a request to the app" from "a request to a published site on its own
- * hostname". Both need one stable answer.
- *
- * Setting A2W_PUBLIC_URL always wins, which is the escape hatch if the first
- * request ever arrives on the wrong hostname, and what you set when attaching a
- * custom domain.
- */
-async function resolvePublicUrl(sql: Sql, env: Bindings, request: Request): Promise<string> {
-  const explicit = (env.A2W_PUBLIC_URL as string | undefined)?.trim();
-  if (explicit) return explicit.replace(/\/+$/, '');
-
-  const stored = await sql.first<{ value: string }>(
-    "SELECT value FROM schema_meta WHERE key = 'public_url'",
-  );
-  if (stored?.value) return stored.value;
-
-  const origin = new URL(request.url).origin;
-  await sql.run(
-    `INSERT INTO schema_meta (key, value) VALUES ('public_url', ?)
-       ON CONFLICT(key) DO NOTHING`,
-    origin,
-  );
-  console.warn(
-    `[config] A2W_PUBLIC_URL was not set; using ${origin} from the first request. ` +
-      'Set it explicitly before attaching a custom domain.',
-  );
-  // Re-read, so concurrent first requests agree on whichever one won.
-  const settled = await sql.first<{ value: string }>(
-    "SELECT value FROM schema_meta WHERE key = 'public_url'",
-  );
-  return settled?.value ?? origin;
-}
 
 function plain(body: string, status: number): Response {
   return new Response(body, { status, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });

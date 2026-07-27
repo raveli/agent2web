@@ -30,10 +30,6 @@
     // Workers allows a 100 MB request body but only 128 MB of isolate memory,
     // and a site arrives base64-inflated before being decoded.
     "A2W_MAX_SITE_BYTES": "26214400",
-
-    // Set to a domain with a proxied *.<domain> record to serve every site on its
-    // own subdomain. workers.dev has no wildcards, so leave it unset there.
-    "A2W_SITES_BASE_DOMAIN": ""
   },
 
   // Secrets, never vars: A2W_SECRET, A2W_ADMIN_PASSWORD (or

@@ -4,6 +4,7 @@ import type { Env } from './app.js';
 import { createMcpServer } from '../core/mcp/server.js';
 import { PUBLISH_SCOPE } from '../oauth.js';
 import { stringsEqual } from '../util/bytes.js';
+import { rememberPublicUrl } from '../public-url.js';
 
 /**
  * The MCP endpoint.
@@ -42,6 +43,9 @@ export async function handleMcp(c: Context<Env>): Promise<Response> {
     }
     clientId = auth.clientId;
   }
+
+  // Authenticated, so this origin is the owner's. Recorded once, if unset.
+  c.executionCtx.waitUntil(rememberPublicUrl(c.var.sql, c.req.url));
 
   const server = createMcpServer({ config, store });
   // Stateless with plain JSON responses: nothing to keep between requests, and
