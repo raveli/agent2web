@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agent2web · Documentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..900,0..100,0..1;1,9..144,300..900,0..100,0..1&family=Geist:wght@300..700&family=JetBrains+Mono:wght@300..600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-display:'Fraunces', Georgia, serif;
+  --font-body:'Geist', -apple-system, sans-serif;
+  --font-mono:'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --paper:#f7f2e8; --paper-2:#f1ead8;
+  --ink:#1a1814; --ink-2:#4a423a; --ink-3:#7a6f64;
+  --rule-strong:#1a181433; --accent:#c8302a;
+}
+* { box-sizing:border-box; }
+body {
+  margin:0; min-height:100vh; background:var(--paper); color:var(--ink);
+  font:400 16px/1.62 var(--font-body); font-feature-settings:"ss01" 1,"cv11" 1;
+  display:flex; align-items:center; justify-content:center; padding:clamp(24px,6vw,64px);
+}
+.wrap { max-width:44rem; width:100%; }
+.masthead {
+  font:400 10.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-3); border-bottom:1px solid var(--rule-strong); padding-bottom:12px;
+  display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
+}
+.masthead strong { color:var(--ink); font-weight:500; letter-spacing:.16em; }
+h1 {
+  font-family:var(--font-display); font-variation-settings:"opsz" 144,"SOFT" 80,"WONK" 1;
+  font-weight:400; font-size:clamp(32px,5vw,48px); line-height:1.05;
+  margin:32px 0 14px; letter-spacing:-.015em;
+}
+h1 .it { font-style:italic; color:var(--accent); }
+p.lede { font-size:17px; color:var(--ink-2); margin:0 0 34px; }
+a.card {
+  display:block; text-decoration:none; color:inherit;
+  border:1px solid var(--rule-strong); background:var(--paper-2);
+  padding:20px 24px; margin-bottom:14px; transition:border-color .15s ease;
+}
+a.card:hover { border-color:var(--accent); }
+a.card h2 {
+  font-family:var(--font-display); font-weight:400; font-size:21px; margin:0 0 5px;
+  font-variation-settings:"opsz" 26,"SOFT" 50;
+}
+a.card p { margin:0; font-size:14.5px; color:var(--ink-2); }
+a.card .go { color:var(--accent); font-size:14px; }
+footer {
+  margin-top:34px; padding-top:16px; border-top:1px solid var(--rule-strong);
+  font:400 11px/1.7 var(--font-mono); letter-spacing:.06em; color:var(--ink-3);
+}
+footer a { color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="masthead">
+    <span><strong>agent2web</strong> · Documentation</span>
+    <span>Cloudflare Workers</span>
+  </div>
+
+  <h1>Somewhere for Claude <span class="it">to put the page.</span></h1>
+  <p class="lede">
+    Personal static hosting with an MCP server attached. Two runbooks — one to get it running on
+    your laptop, one to put it on the internet.
+  </p>
+
+  <a class="card" href="deploying.html">
+    <h2>Deploying</h2>
+    <p>Both routes — the one-click button and six wrangler commands — plus connecting Claude,
+    attaching a domain, what the paid plan costs, and troubleshooting. <span class="go">Read →</span></p>
+  </a>
+
+  <a class="card" href="local-testing.html">
+    <h2>Testing it locally</h2>
+    <p>Running the real Worker on your machine with emulated D1 and R2. No Cloudflare account
+    needed. <span class="go">Read →</span></p>
+  </a>
+
+  <footer>
+    Source and issues: <a href="https://github.com/raveli/agent2web">github.com/raveli/agent2web</a> · MIT
+  </footer>
+</div>
+</body>
+</html>
