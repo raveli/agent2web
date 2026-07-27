@@ -167,91 +167,26 @@ A2W_ADMIN_PASSWORD_HASH=pbkdf2.600000.…
   <div class="step">
     <div class="step-num">03</div>
     <div>
-      <h3 id="set-a2w-public-url-to-the-real-url">Set <code>A2W_PUBLIC_URL</code> to the real URL</h3>
-      <p>This is the one step that is easy to skip and breaks things quietly. The Worker ships with
-      a placeholder pointing at localhost.</p>
-      <p>Dashboard → your Worker → <b>Settings</b> → <b>Variables and Secrets</b> → set
-      <code>A2W_PUBLIC_URL</code> to exactly the origin you will dial, with no trailing path:</p>
-      <div class="out">A2W_PUBLIC_URL=https://agent2web.&lt;your-subdomain&gt;.workers.dev</div>
-      <div class="callout hard">
-        <span class="label">Why exactly</span>
-        It is the <abbr title="OAuth 2.1 — the authorization flow Claude's connectors require">OAuth</abbr>
-        issuer and the audience of every token this server mints. If it does not match the URL the
-        client used, Claude's connector fails to authenticate — while the site itself keeps working,
-        which makes it a confusing failure to diagnose.
-      </div>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="step-num">04</div>
-    <div>
       <h3 id="check-it-came-up">Check it came up</h3>
       <div class="cmd">curl -s https://agent2web.&lt;your-subdomain&gt;.workers.dev/healthz</div>
       <span class="out-label">Expect</span>
       <div class="out">{"status":"ok","sites":0,"version":"0.1.0"}</div>
+      <p>That first request is also how the Worker learns its own address, which it stores and then
+      uses as the <abbr title="OAuth 2.1 — the authorization flow Claude's connectors require">OAuth</abbr>
+      issuer. There is nothing to configure: you could not have known the URL before deploying.</p>
       <p>A <code>500</code> with a configuration message instead means a secret is missing or
       malformed — the body names the variable. That is deliberate: bad configuration stops the
       Worker rather than half-working.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ============================================ TERMINAL -->
-<section id="terminal">
-  <h2 id="deploy-from-the-terminal">Deploy from the terminal</h2>
-  <p class="subtitle">Same result, nothing hidden. This is also how you deploy later changes if you
-  would rather not push to deploy.</p>
-
-  <div class="step">
-    <div class="step-num">01</div>
-    <div>
-      <h3 id="log-in-and-create-the-two-resources">Log in and create the two resources</h3>
-      <div class="cmd">npx wrangler login
-
-npx wrangler d1 create agent2web
-npx wrangler r2 bucket create agent2web-sites</div>
-      <p><code>d1 create</code> prints a <code>database_id</code>. Put it in
-      <code>wrangler.jsonc</code>, replacing the placeholder:</p>
-      <div class="out">"d1_databases": [
-  { "binding": "DB", "database_name": "agent2web", "database_id": "&lt;the uuid it printed&gt;" }
-]</div>
+      <div class="callout">
+        <span class="label">Later, when you attach a custom domain</span>
+        Set <code>A2W_PUBLIC_URL</code> to the new origin under Settings &rarr; Variables. From then
+        on it must match exactly — scheme, host, no trailing slash — because it is the audience of
+        every token this server issues, and a mismatch breaks Claude's connector while the sites
+        themselves keep working.
+      </div>
     </div>
   </div>
 
-  <div class="step">
-    <div class="step-num">02</div>
-    <div>
-      <h3 id="set-the-public-url-then-the-secrets">Set the public URL, then the secrets</h3>
-      <p>Edit <code>vars.A2W_PUBLIC_URL</code> in <code>wrangler.jsonc</code> to the origin you will
-      dial. If you do not know it yet, deploy once, read the URL wrangler prints, then set it and
-      deploy again.</p>
-      <div class="cmd">npm run gen-secrets              <span class="c"># save the admin password</span>
-
-npx wrangler secret put A2W_SECRET
-npx wrangler secret put A2W_ADMIN_PASSWORD_HASH
-npx wrangler secret put A2W_API_TOKEN            <span class="c"># optional</span></div>
-      <p>Each prompts for the value and stores it encrypted. Never put these in
-      <code>wrangler.jsonc</code> — that file is committed.</p>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="step-num">03</div>
-    <div>
-      <h3 id="deploy">Deploy</h3>
-      <div class="cmd">npx wrangler deploy --dry-run    <span class="c"># check the config resolves, no upload</span>
-npm run deploy</div>
-      <span class="out-label">The dry run prints what it will do</span>
-      <div class="out">Total Upload: 1407.21 KiB / gzip: 258.83 KiB
-Your Worker has access to the following bindings:
-  env.DB (agent2web)              D1 Database
-  env.BLOBS (agent2web-sites)     R2 Bucket
-  env.A2W_PUBLIC_URL              Environment Variable</div>
-      <p>The database migrates itself on the first request. To watch it live:</p>
-      <div class="cmd">npx wrangler tail</div>
-    </div>
-  </div>
 </section>
 
 <!-- ============================================ CONNECT -->

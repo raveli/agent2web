@@ -36,13 +36,7 @@ export async function startHarness(
     d1Databases: ['DB'],
     r2Buckets: ['BLOBS'],
     port,
-    bindings: {
-      A2W_PUBLIC_URL: `http://127.0.0.1:${port}`,
-      A2W_SECRET: 'test-secret-that-is-long-enough-0123456789',
-      A2W_ADMIN_PASSWORD: ADMIN_PASSWORD,
-      A2W_API_TOKEN: API_TOKEN,
-      ...stripUndefined(env),
-    },
+    bindings: bindings(port, env),
   });
   await mf.ready;
 
@@ -67,9 +61,25 @@ async function freePort(): Promise<number> {
   });
 }
 
-function stripUndefined(env: Record<string, string | undefined>): Record<string, string> {
+/**
+ * Base bindings with the test's overrides applied.
+ *
+ * Passing `undefined` for a key *unsets* it rather than being ignored, so a test
+ * can exercise a deployment where the variable was never configured.
+ */
+function bindings(
+  port: number,
+  env: Record<string, string | undefined>,
+): Record<string, string> {
+  const merged: Record<string, string | undefined> = {
+    A2W_PUBLIC_URL: `http://127.0.0.1:${port}`,
+    A2W_SECRET: 'test-secret-that-is-long-enough-0123456789',
+    A2W_ADMIN_PASSWORD: ADMIN_PASSWORD,
+    A2W_API_TOKEN: API_TOKEN,
+    ...env,
+  };
   return Object.fromEntries(
-    Object.entries(env).filter((e): e is [string, string] => e[1] !== undefined),
+    Object.entries(merged).filter((e): e is [string, string] => e[1] !== undefined),
   );
 }
 

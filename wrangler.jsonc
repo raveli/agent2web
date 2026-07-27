@@ -23,9 +23,9 @@
   ],
 
   "vars": {
-    // Must match the URL clients dial: it is the OAuth issuer and the audience
-    // of every token issued. Override in the dashboard after attaching a domain.
-    "A2W_PUBLIC_URL": "http://localhost:8787",
+    // Deliberately absent: A2W_PUBLIC_URL. Nobody can know their Worker's URL
+    // before deploying, so the Worker learns it from the first request and
+    // remembers it. Set it explicitly when you attach a custom domain.
 
     // Workers allows a 100 MB request body but only 128 MB of isolate memory,
     // and a site arrives base64-inflated before being decoded.

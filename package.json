@@ -27,5 +27,42 @@
     "miniflare": "^4.20260722.0",
     "typescript": "^5.7.0",
     "wrangler": "^4.114.0"
+  },
+  "cloudflare": {
+    "label": "agent2web",
+    "products": [
+      "Workers",
+      "D1",
+      "R2"
+    ],
+    "bindings": {
+      "DB": {
+        "description": "Stores sites, versions, the file index, OAuth tokens and sessions. Nothing to configure \u2014 accept the suggested name."
+      },
+      "BLOBS": {
+        "description": "Holds the published files themselves. Nothing to configure \u2014 accept the suggested name."
+      },
+      "A2W_SECRET": {
+        "description": "Signs cookies and hashes tokens at rest. Run `npm run gen-secrets` in a clone of this repo, or paste any random string of 32+ characters."
+      },
+      "A2W_ADMIN_PASSWORD_HASH": {
+        "description": "Your admin password, hashed. Run `npm run gen-secrets` to get one \u2014 it prints the hash to paste here and the password to keep. **Save the password: only the hash is stored.**"
+      },
+      "A2W_API_TOKEN": {
+        "description": "Optional. A bearer token so Claude Code, curl and CI can publish without a browser sign-in. `npm run gen-secrets` prints one. Leave empty to require the OAuth flow."
+      },
+      "A2W_ADMIN_TOTP_SECRET": {
+        "description": "Optional. A base32 secret from your authenticator app, if you want a 6-digit code as well as the password. Leave empty to skip."
+      },
+      "A2W_PUBLIC_URL": {
+        "description": "Leave empty. The Worker learns its own URL from the first request. Only set this once you attach a custom domain, as the exact origin, e.g. `https://a2w.example.com`."
+      },
+      "A2W_SITES_BASE_DOMAIN": {
+        "description": "Leave empty. Only for serving each site at `<slug>.yourdomain.com`, which needs a domain on Cloudflare with a proxied wildcard record \u2014 impossible on workers.dev."
+      },
+      "A2W_MAX_SITE_BYTES": {
+        "description": "Largest site accepted, in bytes. The default of 25 MB fits inside a Worker\u2019s memory once content is base64-decoded."
+      }
+    }
   }
 }
