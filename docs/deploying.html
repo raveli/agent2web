@@ -472,11 +472,12 @@ site_set_domain(slug: "quarterly", domain: "reports.customer.example")</div>
       <tr><td>Every <code>wrangler</code> subcommand quoted here exists in wrangler 4.114</td><td><span class="verified">verified</span></td></tr>
       <tr><td>PBKDF2 timings in the table above</td><td><span class="verified">measured, Apple silicon</span></td></tr>
       <tr><td>The Deploy button provisions D1 and R2 from <code>wrangler.jsonc</code> and collects the secrets</td><td><span class="verified">verified on a real deploy</span></td></tr>
-      <tr><td>A button-deployed Worker boots, serves <code>/healthz</code>, and publishes correct OAuth metadata</td><td><span class="verified">verified on a real deploy</span></td></tr>
+      <tr><td>A deployed Worker boots, serves <code>/healthz</code>, and publishes correct OAuth metadata on a custom domain</td><td><span class="verified">verified on a real deploy</span></td></tr>
       <tr><td>Production Workers reject a single PBKDF2 call above 100,000 iterations</td><td><span class="verified">found the hard way — it 500s the login form</span></td></tr>
-      <tr><td>Chained hashing verifies a password on a deployed Worker</td><td><span class="verified no">fix pushed, awaiting the redeploy</span></td></tr>
-      <tr><td>600,000 iterations fit the CPU budget on Cloudflare's own hardware</td><td><span class="verified no">not yet measured</span></td></tr>
-      <tr><td>Claude web's connector completes the OAuth flow against a deployed Worker</td><td><span class="verified no">not yet run</span></td></tr>
+      <tr><td>Chained hashing verifies a password on a deployed Worker</td><td><span class="verified">verified &mdash; admin sign-in succeeds, wrong passwords get 401</span></td></tr>
+      <tr><td>600,000 chained iterations fit the CPU budget on Cloudflare's own hardware</td><td><span class="verified">verified &mdash; ~130&ndash;190 ms over baseline on a live Worker</span></td></tr>
+      <tr><td>The OAuth server completes DCR, PKCE authorize, consent and token errors when deployed</td><td><span class="verified">verified against a live Worker</span></td></tr>
+      <tr><td>Claude web's connector completes the OAuth flow against a deployed Worker</td><td><span class="verified no">the server side is verified; Claude's client not yet run</span></td></tr>
     </tbody>
   </table>
 
