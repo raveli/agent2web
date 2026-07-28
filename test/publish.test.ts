@@ -1,6 +1,5 @@
 import { strict as assert } from 'node:assert';
 import { after, before, test } from 'node:test';
-import { existsSync } from 'node:fs';
 import {
   API_TOKEN,
   callTool,
@@ -317,7 +316,8 @@ test('custom domains resolve by Host header', async () => {
   assert.match(afterClear.body, /MCP endpoint/);
 });
 
-test('delete requires confirmation and removes files from disk', async () => {
+// Whether the bytes themselves go is asserted in storage.test.ts.
+test('delete requires confirmation and cascades in the database', async () => {
   const site = structured((await callTool(h.baseUrl, API_TOKEN, 'site_get', { slug: 'final-name' })).result);
   const wrong = await callTool(h.baseUrl, API_TOKEN, 'site_delete', { slug: 'final-name', confirm_slug: 'nope' });
   assert.equal(wrong.result.isError, true);

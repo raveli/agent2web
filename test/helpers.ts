@@ -83,6 +83,25 @@ function bindings(
   );
 }
 
+/**
+ * Every R2 key, optionally under a prefix.
+ *
+ * Cleanup bugs are invisible from the outside: a pruned version stops being
+ * listed and a deleted site starts 404ing whether or not its bytes were
+ * actually removed. The bucket is the only place that shows the difference.
+ */
+export async function blobKeys(h: Harness, prefix?: string): Promise<string[]> {
+  const bucket = await h.mf.getR2Bucket('BLOBS');
+  const keys: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page: any = await bucket.list({ prefix, cursor, limit: 1000 });
+    keys.push(...page.objects.map((o: { key: string }) => o.key));
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  return keys.sort();
+}
+
 /** Calls an MCP tool over the streamable HTTP endpoint with a bearer token. */
 export async function callTool(
   baseUrl: string,
