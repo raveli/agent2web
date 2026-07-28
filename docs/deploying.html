@@ -160,7 +160,7 @@ A2W_ADMIN_PASSWORD_HASH=pbkdf2c.100000.6.…
         </tbody>
       </table>
       <p>Paste the secrets from step 01 when asked. Workers Builds is wired up as part of the flow,
-      so later pushes deploy themselves.</p>
+      so later pushes to <em>that</em> repository deploy themselves.</p>
       <div class="callout good">
         <span class="label">Nothing else to fill in</span>
         There is no URL to enter — you could not know it yet, and the Worker records the origin you
@@ -168,11 +168,61 @@ A2W_ADMIN_PASSWORD_HASH=pbkdf2c.100000.6.…
         not declared, because the setup form treats every declared variable as required; add them in
         Settings &rarr; Variables if and when you need them.
       </div>
+      <div class="callout hard">
+        <span class="label">Read this before you rely on the button</span>
+        The repository Cloudflare creates is <b>not a fork</b>. It is a new repository holding one
+        squashed commit — <code>source repo import</code>, with no parents — so it shares no history
+        with this project. GitHub's <i>Sync fork</i> button will never appear, and
+        <code>git merge upstream/main</code> refuses outright without
+        <code>--allow-unrelated-histories</code>, after which every file conflicts. Cloudflare
+        publishes no guidance on taking upstream changes after a button deploy.
+        <br><br>
+        This happens even if you fork this repository first and point the button at your fork: the
+        button always creates a new repository. So <b>if you intend to keep up with the project,
+        take the fork route below instead</b>. If you just want it running and do not care about
+        updates, the button is fine.
+      </div>
     </div>
   </div>
 
   <div class="step">
     <div class="step-num">03</div>
+    <div>
+      <h3 id="the-fork-route">The fork route, if you want upstream fixes</h3>
+      <p>Slightly more setup, and then updates are one command forever. Fork this repository on
+      GitHub, then give your fork the resources the placeholder cannot know:</p>
+      <div class="cmd">npx wrangler d1 create agent2web
+npx wrangler r2 bucket create agent2web-sites</div>
+      <p>Put the printed <code>database_id</code> into your fork's <code>wrangler.jsonc</code>,
+      replacing <code>placeholder-replaced-on-provision</code>, and commit it. Then connect it:
+      <b>Workers &amp; Pages &rarr; Create application &rarr; Import a repository</b>, pick your
+      fork, and set the build command to <code>npm run build</code> and the deploy command to
+      <code>npx wrangler deploy</code>. Add the secrets from step 01 under
+      Settings&nbsp;&rarr;&nbsp;Variables.</p>
+      <div class="callout good">
+        <span class="label">Then taking a release is one command</span>
+        <div class="cmd" style="margin:10px 0 0">git fetch upstream &amp;&amp; git merge upstream/main</div>
+        A real fork shares history, so this fast-forwards. The only file that can conflict is
+        <code>wrangler.jsonc</code>, and only when this project edits it — keep your ids and drop
+        everything else.
+      </div>
+      <div class="callout">
+        <span class="label">Two things that will bite you</span>
+        Workers Builds can only see repositories the <b>Cloudflare Workers &amp; Pages GitHub App</b>
+        has been granted access to, which means an account or organisation where you can install it.
+        A repository being public does not make someone else's connectable — so you need your own
+        fork, not this one. And note you cannot fork a repository into the account that already owns
+        it; if you own the upstream, fork into an organisation you control.
+        <br><br>
+        The Worker's name in the dashboard must match <code>name</code> in
+        <code>wrangler.jsonc</code>, or the build fails. Importing a repository takes the name from
+        the file, so this only bites when repointing an existing Worker.
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">04</div>
     <div>
       <h3 id="check-it-came-up">Check it came up</h3>
       <p>Copy your URL from the end of the build log — the line under
