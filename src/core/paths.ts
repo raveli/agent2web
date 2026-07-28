@@ -110,6 +110,23 @@ export function contentTypeFor(path: string): string {
   return type;
 }
 
+/**
+ * The files a browser fetches as subresources rather than navigating to.
+ *
+ * The distinction matters only on password-protected sites: a navigation carries
+ * the unlock cookie, and a subresource request from the sandboxed page does not,
+ * so stylesheets and scripts are denied while linked pages are fine.
+ */
+export function subresourcePaths(paths: string[]): string[] {
+  return paths.filter(path => !/\.html?$/i.test(path)).sort();
+}
+
+/** True for a Sec-Fetch-Dest that the browser will render as its own document. */
+export function isDocumentDestination(dest: string | undefined): boolean {
+  if (!dest) return true; // Absent header: assume a browser navigation or curl.
+  return dest === 'document' || dest === 'iframe' || dest === 'frame' || dest === 'object' || dest === 'embed';
+}
+
 // Object keys mirror what the filesystem layout used to be, so a bucket listing
 // is still readable by a human: sites/<site-id>/<version-id>/<path>
 export const versionPrefix = (siteId: string, versionId: string) =>

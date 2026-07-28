@@ -4,6 +4,7 @@ import type { Config } from '../config.js';
 import type { SiteRow, VersionRow } from '../../store.js';
 import { siteUrls } from '../urls.js';
 import { formatBytes, formatDate } from '../../util/html.js';
+import { subresourcePaths } from '../paths.js';
 import { messageFor } from '../../util/errors.js';
 
 export const responseFormat = z
@@ -21,13 +22,43 @@ export function ok(
   format: ResponseFormat,
   markdown: string,
   structured: Record<string, unknown>,
+  warnings: string[] = [],
 ): CallToolResult {
+  // Warnings ride in both renderings: an agent reading markdown must not miss
+  // something an agent reading JSON would see.
+  const payload = warnings.length ? { ...structured, warnings } : structured;
+  const text =
+    format === 'json'
+      ? JSON.stringify(payload, null, 2)
+      : warnings.length
+        ? `${markdown}\n\n${warnings.map(w => `Warning: ${w}`).join('\n')}`
+        : markdown;
   return {
-    content: [
-      { type: 'text', text: format === 'json' ? JSON.stringify(structured, null, 2) : markdown },
-    ],
-    structuredContent: structured,
+    content: [{ type: 'text', text }],
+    structuredContent: payload,
   };
+}
+
+/**
+ * Warns when a site is locked and carries files a browser fetches as
+ * subresources. Those requests cannot authenticate on a path-based URL — the
+ * sandboxed page has an opaque origin and sends no cookies with them — so the
+ * page renders unstyled and the browser blames ERR_BLOCKED_BY_ORB. Better to say
+ * so at publish time than to let the owner discover it in devtools.
+ */
+export function gatedSubresourceWarnings(site: SiteRow, paths: string[]): string[] {
+  if (site.visibility !== 'password') return [];
+  const blocked = subresourcePaths(paths);
+  if (blocked.length === 0) return [];
+  const shown = blocked.slice(0, 8).join(', ');
+  const more = blocked.length > 8 ? `, and ${blocked.length - 8} more` : '';
+  return [
+    `"${site.slug}" is password protected, so these files will not load for visitors: ` +
+      `${shown}${more}. A locked page is sandboxed, which gives it an opaque origin, and ` +
+      `an opaque origin sends no cookies with subresource requests — the browser reports ` +
+      `ERR_BLOCKED_BY_ORB. Republish as a single file with the CSS and JS inlined, make ` +
+      `the site public, or serve it on its own hostname.`,
+  ];
 }
 
 /** Tool failures are reported inside the result, per the MCP guidance. */

@@ -11,6 +11,7 @@ import {
   ok,
   responseFormat,
   siteLine,
+  gatedSubresourceWarnings,
   siteSummary,
   versionLine,
   versionSummary,
@@ -106,6 +107,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
         ]
           .filter(Boolean)
           .join('\n');
+        const paths = (await store.listFiles(result.version.id)).map(f => f.path);
         return ok(
           args.response_format as ResponseFormat,
           `${result.created ? 'Published' : 'Updated'} **${result.site.slug}** (${plural(
@@ -113,6 +115,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
             'file',
           )}, ${formatBytes(result.version.bytes)})\n\n${urls.primary}\n${extra}`.trim(),
           structured,
+          gatedSubresourceWarnings(result.site, paths),
         );
       } catch (err) {
         return fail(err);
@@ -156,6 +159,10 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
             'file',
           )} (${formatBytes(result.version.bytes)}).\n\n${siteUrls(config, result.site).primary}`,
           { ...siteSummary(config, result.site), version: versionSummary(result.version) },
+          gatedSubresourceWarnings(
+            result.site,
+            (await store.listFiles(result.version.id)).map(f => f.path),
+          ),
         );
       } catch (err) {
         return fail(err);
@@ -308,10 +315,14 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
             : site.visibility === 'disabled'
               ? 'The site now returns 404 to visitors; files are kept.'
               : 'The site is publicly readable.';
+        const locked = site.current_version_id
+          ? (await store.listFiles(site.current_version_id)).map(f => f.path)
+          : [];
         return ok(
           args.response_format as ResponseFormat,
           `**${site.slug}** access set to \`${site.visibility}\`. ${note}`,
           siteSummary(config, site),
+          gatedSubresourceWarnings(site, locked),
         );
       } catch (err) {
         return fail(err);

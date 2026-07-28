@@ -5,6 +5,7 @@ import type { Resolution } from '../core/resolve.js';
 import { issueSiteCookie, siteCookieName, siteCookieValid } from '../core/session.js';
 import { sitePasswordPage, notFoundPage } from '../core/views/pages.js';
 import { siteCookiePath } from '../core/urls.js';
+import { isDocumentDestination } from '../core/paths.js';
 import { fromBase64 } from '../util/bytes.js';
 
 type SiteTarget = Extract<Resolution, { kind: 'site' }>;
@@ -31,7 +32,7 @@ export async function serveSite(c: Context<Env>, target: SiteTarget): Promise<Re
         'Retry-After': String(Math.max(1, retryAfter)),
       });
     }
-    if (access !== 'ok') return passwordPrompt(c, target, 401);
+    if (access !== 'ok') return denyAccess(c, target);
   }
 
   const resolved = await store.resolveRequest(site, inner);
@@ -171,6 +172,45 @@ async function handleAuthEndpoint(
     ),
   );
   return new Response(null, { status: 303, headers });
+}
+
+/**
+ * Refuses a request to a locked site, in whatever form the caller can read.
+ *
+ * A navigation gets the password form. A stylesheet, script, image or font gets
+ * plain text, because a browser will not render HTML for those destinations — it
+ * discards the response and reports `ERR_BLOCKED_BY_ORB`, an error that names
+ * neither the site nor the password. Since these requests can never succeed on a
+ * path-based URL, the body explains why and how to fix it rather than pretending
+ * a retry would help.
+ */
+function denyAccess(c: Context<Env>, target: SiteTarget): Response {
+  const dest = c.req.header('sec-fetch-dest');
+  if (isDocumentDestination(dest)) return passwordPrompt(c, target, 401);
+
+  const slug = target.site.slug;
+  const body =
+    `401 Password required\n\n` +
+    `"${slug}" is password protected and this ${dest} request carried no unlock cookie.\n\n` +
+    `It never will. A page on a protected site is served with a sandbox CSP, which gives\n` +
+    `it an opaque origin, and an opaque origin sends no cookies with its subresource\n` +
+    `requests — regardless of SameSite. So CSS, JS, fonts and images cannot authenticate\n` +
+    `on a ${target.basePath}/ URL. Browsers surface the HTML form this used to return as\n` +
+    `ERR_BLOCKED_BY_ORB.\n\n` +
+    `Fixes, cheapest first:\n` +
+    `  1. Republish as a single file with the CSS and JS inlined.\n` +
+    `  2. Make the site public, if it need not be private.\n` +
+    `  3. Serve it on its own hostname, where the page gets a real origin and\n` +
+    `     cookies work: set A2W_SITES_BASE_DOMAIN, or give the site a custom domain.\n`;
+
+  return new Response(body, {
+    status: 401,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
 }
 
 function passwordPrompt(c: Context<Env>, target: SiteTarget, status: 200 | 401): Response {
