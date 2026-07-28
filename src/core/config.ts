@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { WebCryptoProvider } from '../core/crypto.js';
+import { isUncappedPbkdf2Hash } from '../core/crypto.js';
 
 /**
  * Configuration comes from Worker vars and secrets, so the same code deploys to
@@ -110,11 +111,18 @@ export async function loadConfig(
     // credentials". scrypt hashes land here on Cloudflare, which has no scrypt.
     if (!crypto.canVerify(v.A2W_ADMIN_PASSWORD_HASH)) {
       throw new ConfigError(
-        'Invalid configuration:\n' +
-          '  A2W_ADMIN_PASSWORD_HASH: is not a hash this build can verify. Expected\n' +
-          '    "pbkdf2.600000.<salt>.<key>" from `npm run gen-secrets`.\n' +
-          '    A "scrypt." hash came from an older, self-hosted build: Cloudflare has no\n' +
-          '    scrypt, so generate a new hash or set A2W_ADMIN_PASSWORD instead.',
+        isUncappedPbkdf2Hash(v.A2W_ADMIN_PASSWORD_HASH)
+          ? 'Invalid configuration:\n' +
+            '  A2W_ADMIN_PASSWORD_HASH: was generated in the single-call "pbkdf2." format,\n' +
+            '    which asked for 600,000 iterations at once. Deployed Cloudflare Workers\n' +
+            '    refuse any derivation above 100,000, so that hash can never be verified\n' +
+            '    there and every sign-in would fail. Run `npm run gen-secrets` and replace\n' +
+            '    the secret with the "pbkdf2c." hash it prints.'
+          : 'Invalid configuration:\n' +
+            '  A2W_ADMIN_PASSWORD_HASH: is not a hash this build can verify. Expected\n' +
+            '    "pbkdf2c.100000.6.<salt>.<key>" from `npm run gen-secrets`.\n' +
+            '    A "scrypt." hash came from an older, self-hosted build: Cloudflare has no\n' +
+            '    scrypt, so generate a new hash or set A2W_ADMIN_PASSWORD instead.',
       );
     }
     adminPasswordHash = v.A2W_ADMIN_PASSWORD_HASH;

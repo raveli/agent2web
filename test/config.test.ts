@@ -52,6 +52,21 @@ test('a hash this build cannot verify stops startup, not the login form', async 
   await assert.rejects(() => load({ ...b, A2W_ADMIN_PASSWORD_HASH: scrypt }), /can verify/);
   await assert.rejects(() => load({ ...b, A2W_ADMIN_PASSWORD_HASH: scrypt }), /Cloudflare has no/);
 
+  // The single-call format shipped briefly and is unverifiable in production,
+  // where 600,000 iterations at once are refused. Its message has to name the
+  // actual problem, or the only clue is "Incorrect credentials" for a password
+  // that is correct.
+  const uncapped =
+    'pbkdf2.600000.c2FsdHNhbHRzYWx0c2E.a2V5a2V5a2V5a2V5a2V5a2V5a2V5a2V5a2V5a2V5aTQ';
+  await assert.rejects(
+    () => load({ ...b, A2W_ADMIN_PASSWORD_HASH: uncapped }),
+    /above 100,000/,
+  );
+  await assert.rejects(
+    () => load({ ...b, A2W_ADMIN_PASSWORD_HASH: uncapped }),
+    /gen-secrets/,
+  );
+
   for (const bad of [
     'pbkdf2',
     'pbkdf2.600000.onlythree',
@@ -65,7 +80,7 @@ test('a hash this build cannot verify stops startup, not the login form', async 
 
 test('hashes survive an unquoted shell round trip', async () => {
   const hash = await crypto.hashPassword('a-good-admin-password');
-  assert.match(hash, /^pbkdf2\.600000\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+  assert.match(hash, /^pbkdf2c\.100000\.6\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
   // A "$" here would be expanded by the shell in an unquoted .env line, which is
   // exactly how the previous format silently corrupted itself.
   assert.ok(!hash.includes('$'));

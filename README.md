@@ -142,7 +142,7 @@ path works.
   MCP spec requires, but a registration is worthless without that approval, and
   redirect URIs are restricted to Claude's hosts and http loopback.
 - **Tokens at rest**: access, refresh and session tokens are stored only as HMACs
-  keyed with `A2W_SECRET`. Passwords use PBKDF2-SHA256 at 600k iterations.
+  keyed with `A2W_SECRET`. Passwords use PBKDF2-SHA256 at 600k iterations, run as six chained rounds of 100k because a deployed Worker refuses any single derivation above that.
 - **Refresh tokens rotate.** Presenting a spent one revokes the whole chain;
   replaying an authorization code revokes everything issued from it.
 - **Credential throttling lives in D1**, not in memory. Each Worker isolate has
@@ -167,7 +167,7 @@ Set as **secrets** (Settings → Variables, or `wrangler secret put`):
 | Secret | Meaning |
 | --- | --- |
 | `A2W_SECRET` | 32+ chars. Signs cookies, hashes tokens at rest. |
-| `A2W_ADMIN_PASSWORD_HASH` | From `npm run gen-secrets`, as `pbkdf2.600000.<salt>.<key>`. (`A2W_ADMIN_PASSWORD` works but warns; if both are set the hash wins.) |
+| `A2W_ADMIN_PASSWORD_HASH` | From `npm run gen-secrets`, as `pbkdf2c.100000.6.<salt>.<key>`. (`A2W_ADMIN_PASSWORD` works but warns; if both are set the hash wins.) |
 | `A2W_API_TOKEN` | Optional static bearer token for MCP. 32+ chars. Unset disables it. |
 | `A2W_ADMIN_TOTP_SECRET` | Optional base32 secret; when set, sign-in also needs a 6-digit code. |
 

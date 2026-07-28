@@ -5,6 +5,14 @@
   "compatibility_date": "2026-07-01",
   "compatibility_flags": ["nodejs_compat"],
 
+  // One address, on purpose. This Worker is its own OAuth authorization server
+  // and it learns its issuer from the first request the owner authenticates on,
+  // so every extra origin it answers to is a chance to pin the wrong one. Both
+  // of these are Cloudflare's defaults; naming them keeps the default from
+  // drifting and silences the deploy-time warnings about leaving them unset.
+  "workers_dev": true,
+  "preview_urls": false,
+
   // Deploy-to-Cloudflare reads these and provisions the resources, filling the
   // ids back in. Two bindings, no KV: OAuth tokens live in D1 alongside the
   // sites, because agent2web brings its own authorization server.

@@ -81,8 +81,8 @@
 npm install
 npm test</div>
       <span class="out-label">Expect</span>
-      <div class="out"># tests 79
-# pass 79
+      <div class="out"># tests 98
+# pass 98
 # fail 0</div>
       <p>The suite bundles the Worker exactly as deployment does, boots it in Miniflare with local
       D1 and R2, and drives it over HTTP. A green run means the code path that deploys works.</p>
@@ -133,7 +133,7 @@ open http://localhost:8787/admin          <span class="c"># sign in with the adm
       <span class="out-label">Prints</span>
       <div class="out">A2W_SECRET=…            signs cookies, hashes tokens at rest
 A2W_API_TOKEN=…         optional bearer token for Claude Code / curl / CI
-A2W_ADMIN_PASSWORD_HASH=pbkdf2.600000.…
+A2W_ADMIN_PASSWORD_HASH=pbkdf2c.100000.6.…
 
 # Admin password (stored nowhere else — save it now): …</div>
       <div class="callout hard">
@@ -175,12 +175,26 @@ A2W_ADMIN_PASSWORD_HASH=pbkdf2.600000.…
     <div class="step-num">03</div>
     <div>
       <h3 id="check-it-came-up">Check it came up</h3>
-      <div class="cmd">curl -s https://agent2web.&lt;your-subdomain&gt;.workers.dev/healthz</div>
+      <p>Copy your URL from the end of the build log — the line under
+      <code>Deployed &hellip; triggers</code>. Do not try to guess it: Cloudflare forks the repo as
+      <code>agent2web-deploy</code> and names the Worker after the fork, so the address is usually
+      <code>agent2web-deploy.&lt;your-subdomain&gt;.workers.dev</code> rather than
+      <code>agent2web.&hellip;</code>.</p>
+      <div class="cmd">curl -s https://agent2web-deploy.&lt;your-subdomain&gt;.workers.dev/healthz</div>
       <span class="out-label">Expect</span>
       <div class="out">{"status":"ok","sites":0,"version":"0.1.0"}</div>
-      <p>That first request is also how the Worker learns its own address, which it stores and then
-      uses as the <abbr title="OAuth 2.1 — the authorization flow Claude's connectors require">OAuth</abbr>
-      issuer. There is nothing to configure: you could not have known the URL before deploying.</p>
+      <p>This request proves the Worker is up, but it deliberately teaches it nothing. The origin
+      that becomes the
+      <abbr title="OAuth 2.1 — the authorization flow Claude's connectors require">OAuth</abbr>
+      issuer is recorded from the first request that <em>proves it came from you</em> — signing in
+      at <code>/admin</code>, or an authenticated MCP call. An anonymous request is served on
+      whatever host it arrived at and stores nothing, so a stranger cannot point your issuer at
+      their domain by being first through the door.</p>
+      <div class="callout">
+        <span class="label">So sign in on the address you intend to keep</span>
+        Use the <code>workers.dev</code> URL above, not a per-version preview URL. Whichever origin
+        you first sign in on is the one that sticks.
+      </div>
       <p>A <code>500</code> with a configuration message instead means a secret is missing or
       malformed — the body names the variable. That is deliberate: bad configuration stops the
       Worker rather than half-working.</p>
@@ -299,9 +313,9 @@ site_set_domain(slug: "quarterly", domain: "reports.customer.example")</div>
   <h2 id="plan-requirements-and-cost">Plan requirements and cost</h2>
 
   <p class="subtitle">The $5/mo Workers Paid plan is required for <b>CPU time per request</b>, not for
-  traffic. Password hashing is PBKDF2-SHA256 at 600,000 iterations, which measures about 130 ms.
-  The Free plan caps a request at 10 ms of CPU — enough for roughly 40,000 iterations, an order of
-  magnitude below current guidance. Rather than weaken the hash, agent2web asks for the paid plan.</p>
+  traffic. Password hashing costs 600,000 PBKDF2-SHA256 iterations, about 130 ms. The Free plan caps
+  a request at 10 ms of CPU — enough for roughly 40,000 iterations, an order of magnitude below
+  current guidance. Rather than weaken the hash, agent2web asks for the paid plan.</p>
 
   <table>
     <thead><tr><th>Measured</th><th>Free plan</th><th>Paid plan</th></tr></thead>
@@ -312,6 +326,22 @@ site_set_domain(slug: "quarterly", domain: "reports.customer.example")</div>
       <tr><td><b>600,000 iterations · 130 ms</b></td><td>over</td><td><b>0.4% of budget</b></td></tr>
     </tbody>
   </table>
+
+  <div class="callout" style="margin-top:20px">
+    <span class="label">Why the hash is chained rather than one call</span>
+    A deployed Worker refuses any single PBKDF2 derivation above <b>100,000 iterations</b> —
+    <code>NotSupportedError: Pbkdf2 failed: iteration counts above 100000 are not supported</code>
+    — because Cloudflare's CPU limiter cannot interrupt BoringSSL mid-loop and so declines the work
+    up front. This is a hard cap on <em>both</em> plans, separate from the CPU budget above. So the
+    600,000 iterations run as six chained rounds of 100,000, each feeding the next: an attacker
+    still pays the full cost per guess, and no single call breaks the rule.
+    <br><br>
+    Worth knowing if you fork this: the cap does not exist locally. workerd removed its own default
+    in commit <code>12bc98a9</code>, so <code>wrangler dev</code>, Miniflare and the test suite all
+    run uncapped, and only the deployed enforcer objects. Code that passes every test can still be
+    broken in production, which is why <code>test/crypto.test.ts</code> asserts the ceiling against
+    the runtime call itself instead of waiting for a runtime to raise it.
+  </div>
 
   <p style="margin-top:20px">In practice the cost is negligible. The paid plan includes 30M
   CPU-milliseconds a month, which is about <b>230,000 password hashes</b>. Real usage is a handful:
@@ -386,13 +416,16 @@ site_set_domain(slug: "quarterly", domain: "reports.customer.example")</div>
   <table>
     <thead><tr><th>Claim</th><th>Status</th></tr></thead>
     <tbody>
-      <tr><td>The 79 tests pass against the real Worker bundle in Miniflare with local D1 and R2</td><td><span class="verified">verified</span></td></tr>
+      <tr><td>The 98 tests pass against the real Worker bundle in Miniflare with local D1 and R2</td><td><span class="verified">verified</span></td></tr>
       <tr><td><code>npm run dev</code> serves, publishes, gates on password, and runs the admin UI</td><td><span class="verified">verified</span></td></tr>
       <tr><td><code>wrangler deploy --dry-run</code> resolves both bindings; 259 KB gzipped</td><td><span class="verified">verified</span></td></tr>
       <tr><td>Every <code>wrangler</code> subcommand quoted here exists in wrangler 4.114</td><td><span class="verified">verified</span></td></tr>
       <tr><td>PBKDF2 timings in the table above</td><td><span class="verified">measured, Apple silicon</span></td></tr>
-      <tr><td>The same hash fits the CPU budget on Cloudflare's own hardware</td><td><span class="verified no">not yet measured</span></td></tr>
-      <tr><td>The Deploy button provisions D1 and R2 from <code>wrangler.jsonc</code></td><td><span class="verified no">from Cloudflare's docs</span></td></tr>
+      <tr><td>The Deploy button provisions D1 and R2 from <code>wrangler.jsonc</code> and collects the secrets</td><td><span class="verified">verified on a real deploy</span></td></tr>
+      <tr><td>A button-deployed Worker boots, serves <code>/healthz</code>, and publishes correct OAuth metadata</td><td><span class="verified">verified on a real deploy</span></td></tr>
+      <tr><td>Production Workers reject a single PBKDF2 call above 100,000 iterations</td><td><span class="verified">found the hard way — it 500s the login form</span></td></tr>
+      <tr><td>Chained hashing verifies a password on a deployed Worker</td><td><span class="verified no">fix pushed, awaiting the redeploy</span></td></tr>
+      <tr><td>600,000 iterations fit the CPU budget on Cloudflare's own hardware</td><td><span class="verified no">not yet measured</span></td></tr>
       <tr><td>Claude web's connector completes the OAuth flow against a deployed Worker</td><td><span class="verified no">not yet run</span></td></tr>
     </tbody>
   </table>
