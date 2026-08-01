@@ -18,6 +18,21 @@ import {
   type ResponseFormat,
 } from './format.js';
 
+/**
+ * Publishing to the open web is a one-way door — a link, once shared, cannot be
+ * unshared — so it takes a deliberate second argument rather than a value the
+ * model may have filled in without asking anyone.
+ */
+function requirePublicConfirmation(visibility: unknown, confirmed: unknown): void {
+  if (visibility !== 'public' || confirmed === true) return;
+  throw new UserError(
+    'Refusing to make this site public without confirmation. Public means anyone with the link ' +
+      'can read it, with no password, and a link that has been shared cannot be unshared. Ask the ' +
+      'person you are working for, then pass confirm_public:true. Leaving visibility unset keeps ' +
+      'the site password protected.',
+  );
+}
+
 export type ToolContext = {
   config: Config;
   store: SiteStore;
@@ -46,7 +61,10 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
       description:
         'Publishes static files as a website and returns its public URL. Pass `html` for a single self-contained page, or `files` for a multi-file site (which must include "index.html"). ' +
         'If the slug already exists this adds a new version and switches the site to it, keeping the URL stable. ' +
-        `Optionally password-protect the site by passing \`password\`. ${limits}`,
+        'New sites are password protected by default: pass `password` to choose one, or omit it and a ' +
+        'readable password is generated and returned once. To publish something anyone with the link can ' +
+        'read, set visibility:"public" AND confirm_public:true — ask the person you are working for first, ' +
+        `because a link that has been shared cannot be unshared. ${limits}`,
       inputSchema: {
         slug: z
           .string()
@@ -61,11 +79,21 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
         visibility: z
           .enum(['public', 'password', 'disabled'])
           .optional()
-          .describe('public (default), password (requires `password`), or disabled (returns 404 to visitors).'),
+          .describe(
+            'password (the default; one is generated if you pass none), public (anyone with the link — ' +
+              'requires confirm_public), or disabled (returns 404 to visitors).',
+          ),
         password: z
           .string()
           .optional()
           .describe('Sets a password and switches the site to password-protected access. Minimum 6 characters.'),
+        confirm_public: z
+          .boolean()
+          .optional()
+          .describe(
+            'Required to publish with visibility:"public". Confirms the person you are working for accepts ' +
+              'that anyone with the link can read this, with no password.',
+          ),
         if_exists: z
           .enum(['new_version', 'fail'])
           .default('new_version')
@@ -85,6 +113,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
         if (args.password && args.password.length < 6) {
           throw new UserError('Site password must be at least 6 characters.');
         }
+        requirePublicConfirmation(args.visibility, args.confirm_public);
         const result = await store.publish({
           slug: args.slug,
           title: args.title,
@@ -99,11 +128,17 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
           ...siteSummary(config, result.site),
           created: result.created,
           version: versionSummary(result.version),
+          ...(result.generatedPassword ? { generated_password: result.generatedPassword } : {}),
         };
         const extra = [
           urls.subdomain && urls.subdomain !== urls.primary ? `Also at: ${urls.subdomain}` : undefined,
           urls.path !== urls.primary ? `Also at: ${urls.path}` : undefined,
-          result.site.visibility === 'password' ? 'Visitors must enter the site password.' : undefined,
+          result.generatedPassword
+            ? `Password (shown once, save it now): ${result.generatedPassword}`
+            : result.site.visibility === 'password'
+              ? 'Visitors must enter the site password.'
+              : undefined,
+          result.site.visibility === 'public' ? 'Anyone with the link can read this.' : undefined,
         ]
           .filter(Boolean)
           .join('\n');
@@ -293,7 +328,8 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
     {
       title: 'Set site access',
       description:
-        'Changes who can view a site: "public" (anyone, clears any password), "password" (visitors must enter the password), or "disabled" (returns 404). ' +
+        'Changes who can view a site: "public" (anyone with the link, clears any password), "password" (visitors must enter the password), or "disabled" (returns 404). ' +
+        'Switching to "public" requires confirm_public:true — ask first. Switching to "password" without a password generates one and returns it once. ' +
         'Setting a new password immediately invalidates sessions unlocked with the old one.',
       inputSchema: {
         slug: slugArg,
@@ -301,17 +337,31 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
         password: z
           .string()
           .optional()
-          .describe('New password, required the first time visibility is set to "password". Minimum 6 characters.'),
+          .describe('New password. Optional: one is generated when visibility is "password" and none is set.'),
+        confirm_public: z
+          .boolean()
+          .optional()
+          .describe(
+            'Required for visibility:"public". Confirms the person you are working for accepts that anyone ' +
+              'with the link can read this.',
+          ),
         response_format: responseFormat,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async args => {
       try {
-        const site = await store.setAccess(args.slug, args.visibility as Visibility, args.password ?? null);
+        requirePublicConfirmation(args.visibility, args.confirm_public);
+        const { site, generatedPassword } = await store.setAccess(
+          args.slug,
+          args.visibility as Visibility,
+          args.password ?? null,
+        );
         const note =
           site.visibility === 'password'
-            ? 'Visitors now need the password. `curl -u :<password>` also works.'
+            ? generatedPassword
+              ? `Password (shown once, save it now): ${generatedPassword}`
+              : 'Visitors now need the password. `curl -u :<password>` also works.'
             : site.visibility === 'disabled'
               ? 'The site now returns 404 to visitors; files are kept.'
               : 'The site is publicly readable.';
@@ -321,7 +371,10 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
         return ok(
           args.response_format as ResponseFormat,
           `**${site.slug}** access set to \`${site.visibility}\`. ${note}`,
-          siteSummary(config, site),
+          {
+            ...siteSummary(config, site),
+            ...(generatedPassword ? { generated_password: generatedPassword } : {}),
+          },
           gatedSubresourceWarnings(site, locked),
         );
       } catch (err) {

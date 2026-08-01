@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { after, before, test } from 'node:test';
-import { API_TOKEN, callTool, cookieValue, startHarness, structured, type Harness } from './helpers.js';
+import { API_TOKEN, callTool, cookieValue, startHarness, structured, textOf, type Harness } from './helpers.js';
 
 let h: Harness;
 
@@ -114,7 +114,11 @@ test('repeated failures are throttled', async () => {
 });
 
 test('making a site public clears the password; disabling hides it', async () => {
-  await callTool(h.baseUrl, API_TOKEN, 'site_set_access', { slug: 'secret', visibility: 'public' });
+  await callTool(h.baseUrl, API_TOKEN, 'site_set_access', {
+    slug: 'secret',
+    visibility: 'public',
+    confirm_public: true,
+  });
   const open = await fetch(`${h.baseUrl}/s/secret/`);
   assert.equal(open.status, 200);
 
@@ -123,13 +127,26 @@ test('making a site public clears the password; disabling hides it', async () =>
   assert.equal(hidden.status, 404);
 });
 
-test('enabling password protection without ever setting a password is refused', async () => {
-  await callTool(h.baseUrl, API_TOKEN, 'site_publish', { slug: 'open-site', html: '<p>open</p>' });
+test('locking a site with no password mints one rather than refusing', async () => {
+  await callTool(h.baseUrl, API_TOKEN, 'site_publish', {
+    visibility: 'public',
+    confirm_public: true,
+    slug: 'open-site',
+    html: '<p>open</p>',
+  });
+  // This used to be an error. Refusing left the caller stuck, and the obvious
+  // workaround — writing a null hash — produced a site nobody could open.
   const res = await callTool(h.baseUrl, API_TOKEN, 'site_set_access', {
     slug: 'open-site',
     visibility: 'password',
   });
-  assert.equal(res.result.isError, true);
+  assert.notEqual(res.result.isError, true, textOf(res.result));
+  const minted = structured(res.result).generated_password as string;
+  assert.ok(minted, 'expected a minted password');
+  const opened = await fetch(`${h.baseUrl}/s/open-site/`, {
+    headers: { authorization: 'Basic ' + Buffer.from(`:${minted}`).toString('base64') },
+  });
+  assert.equal(opened.status, 200);
 
   const tooShort = await callTool(h.baseUrl, API_TOKEN, 'site_set_access', {
     slug: 'open-site',

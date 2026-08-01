@@ -59,7 +59,13 @@ export type PublishOptions = {
   ifExists?: 'new_version' | 'fail';
 };
 
-export type PublishResult = { site: SiteRow; version: VersionRow; created: boolean };
+export type PublishResult = {
+  site: SiteRow;
+  version: VersionRow;
+  created: boolean;
+  /** Set only when this call minted a password; it is not recoverable later. */
+  generatedPassword?: string;
+};
 
 /** A file matched for serving: which object to stream and how to label it. */
 export type ResolvedFile = { key: string; path: string; contentType: string };
@@ -217,12 +223,25 @@ export class SiteStore {
       );
     }
 
+    // A new site is protected unless the caller asked for something else. This
+    // product turns things you would not publish into pages, so an omitted
+    // argument has to fail closed.
+    let generatedPassword: string | undefined;
     if (!site) {
       const slug = await this.allocateSlug(options.slug, options.title);
       const id = newId();
       const visibility: Visibility = options.password
         ? 'password'
-        : (options.visibility ?? 'public');
+        : (options.visibility ?? 'password');
+
+      // Protected with no password used to store a null hash, which denies
+      // every request forever. Mint one instead and hand it back.
+      let password = options.password ?? undefined;
+      if (visibility === 'password' && !password) {
+        password = this.crypto.readablePassword();
+        generatedPassword = password;
+      }
+
       await this.sql.run(
         `INSERT INTO sites (id, slug, title, visibility, password_hash, view_count, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
@@ -230,7 +249,7 @@ export class SiteStore {
         slug,
         options.title ?? slug,
         visibility,
-        options.password ? await this.crypto.hashPassword(options.password) : null,
+        password ? await this.crypto.hashPassword(password) : null,
         now,
         now,
       );
@@ -259,6 +278,7 @@ export class SiteStore {
       site: (await this.getSiteById(site.id))!,
       version: (await this.getVersion(site.id, versionId))!,
       created,
+      generatedPassword,
     };
   }
 
@@ -390,6 +410,7 @@ export class SiteStore {
 
   async setAccess(slug: string, visibility: Visibility, password?: string | null) {
     const site = await this.requireSite(slug);
+    let generated: string | undefined;
     if (visibility === 'password') {
       if (password) {
         if (password.length < 6) throw new UserError('Site password must be at least 6 characters.');
@@ -400,15 +421,21 @@ export class SiteStore {
           Date.now(),
           site.id,
         );
-      } else {
-        if (!site.password_hash) {
-          throw new UserError(
-            `Site "${slug}" has no password set — pass a password to enable password protection.`,
-          );
-        }
+      } else if (site.password_hash) {
         await this.sql.run(
           'UPDATE sites SET visibility = ?, updated_at = ? WHERE id = ?',
           'password',
+          Date.now(),
+          site.id,
+        );
+      } else {
+        // Locking a site that has never had a password: mint one rather than
+        // refuse, so the caller always ends up with something that opens.
+        generated = this.crypto.readablePassword();
+        await this.sql.run(
+          'UPDATE sites SET visibility = ?, password_hash = ?, updated_at = ? WHERE id = ?',
+          'password',
+          await this.crypto.hashPassword(generated),
           Date.now(),
           site.id,
         );
@@ -421,7 +448,7 @@ export class SiteStore {
         site.id,
       );
     }
-    return (await this.getSiteById(site.id))!;
+    return { site: (await this.getSiteById(site.id))!, generatedPassword: generated };
   }
 
   async rename(slug: string, newSlug?: string, title?: string): Promise<SiteRow> {

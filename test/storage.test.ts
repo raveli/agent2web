@@ -26,7 +26,7 @@ async function siteId(slug: string): Promise<string> {
 }
 
 async function publish(slug: string, files: Record<string, string>, note?: string) {
-  const { result } = await callTool(h.baseUrl, API_TOKEN, 'site_publish', {
+  const { result } = await callTool(h.baseUrl, API_TOKEN, 'site_publish', { visibility: 'public', confirm_public: true,
     slug,
     note,
     if_exists: 'new_version',

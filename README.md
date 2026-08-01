@@ -25,7 +25,8 @@ Ask for a change, it republishes to the same URL and keeps the old version.
 
 - **Eleven `site_*` MCP tools** over streamable HTTP — publish, update single
   files, read back, rename, roll back, delete
-- **Password-protect any site**, or disable it, without touching the files
+- **Private by default** — a new site is password protected and the password is
+  generated for you; making one world-readable takes a deliberate confirmation
 - **Every publish is a new version.** Roll back from the admin UI or a tool call
 - **Only you can publish.** Built-in OAuth 2.1 server for Claude web, plus a
   bearer token for Claude Code and CI
@@ -101,12 +102,12 @@ claude mcp add --transport http agent2web https://your-worker/mcp \
 
 | Tool | What it does |
 | --- | --- |
-| `site_publish` | Publishes `html` (single page) or `files` (multi-file, needs `index.html`). Same slug again → new version, same URL. Optional `password`. |
+| `site_publish` | Publishes `html` (single page) or `files` (multi-file, needs `index.html`). Same slug again → new version, same URL. Password protected unless you pass `visibility:"public"` **and** `confirm_public:true`; supply a `password` or let one be generated and returned once. |
 | `site_update_files` | Adds/replaces/removes individual files, carrying the rest over. For iterating on big sites. |
 | `site_list` | Lists sites with URLs and access state. Paginated. |
 | `site_get` | One site: URLs, access, versions, file list. |
 | `site_read_file` | Reads a published file back so it can be edited. |
-| `site_set_access` | `public` / `password` / `disabled`. |
+| `site_set_access` | `public` (needs `confirm_public:true`) / `password` (generates one if none is set) / `disabled`. |
 | `site_rename` | Change slug and/or title. |
 | `site_set_domain` | Attach a custom hostname, and print the DNS steps. |
 | `site_list_versions` | Retained versions, newest first. |

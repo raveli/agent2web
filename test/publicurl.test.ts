@@ -45,7 +45,7 @@ test('a failed admin login does not record the origin either', async () => {
 });
 
 test('an authenticated MCP call records it', async () => {
-  const { result } = await callTool(h.baseUrl, API_TOKEN, 'site_publish', {
+  const { result } = await callTool(h.baseUrl, API_TOKEN, 'site_publish', { visibility: 'public', confirm_public: true,
     slug: 'learned', html: '<h1>learned</h1>',
   });
   assert.equal(structured(result).slug, 'learned');

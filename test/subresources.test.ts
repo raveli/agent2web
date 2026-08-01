@@ -100,7 +100,7 @@ test('the warning explains the fix rather than just the symptom', async () => {
 
 test('public multi-file sites are not warned about', async () => {
   const { result } = await callTool(h.baseUrl, API_TOKEN, 'site_publish', {
-    slug: 'open-multi', files: FILES,
+    slug: 'open-multi', files: FILES, visibility: 'public', confirm_public: true,
   });
   assert.deepEqual(structured(result).warnings ?? [], []);
   assert.ok(!textOf(result).includes('app.css'));

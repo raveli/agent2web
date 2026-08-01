@@ -5,7 +5,7 @@ import { API_TOKEN, callTool, rawRequest, startHarness, type Harness } from './h
 let h: Harness;
 before(async () => {
   h = await startHarness();
-  await callTool(h.baseUrl, API_TOKEN, 'site_publish', { slug: 'pub', html: '<h1>public content</h1>' });
+  await callTool(h.baseUrl, API_TOKEN, 'site_publish', { visibility: 'public', confirm_public: true, slug: 'pub', html: '<h1>public content</h1>' });
   await callTool(h.baseUrl, API_TOKEN, 'site_publish', {
     slug: 'secret', html: '<h1>SECRET CONTENT</h1>', password: 'open-sesame',
   });

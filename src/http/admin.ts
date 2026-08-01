@@ -207,12 +207,18 @@ export function adminRoutes(): Hono<Env> {
       const visibility = String(form.get('visibility') ?? 'public') as Visibility;
       const raw = form.get('password');
       const password = typeof raw === 'string' && raw ? raw : null;
-      const site = await c.var.store.setAccess(String(c.req.param('slug')), visibility, password);
+      const { site, generatedPassword } = await c.var.store.setAccess(
+        String(c.req.param('slug')),
+        visibility,
+        password,
+      );
       const message =
         site.visibility === 'password'
           ? password
             ? 'Password saved. Anyone who unlocked the site with the old one has to enter the new one.'
-            : 'Visitors now need the password.'
+            : generatedPassword
+              ? `Visitors now need this password, shown once: ${generatedPassword}`
+              : 'Visitors now need the password.'
           : site.visibility === 'disabled'
             ? 'The site now returns 404. Its files are kept.'
             : 'Anyone with the link can now see the site.';

@@ -43,7 +43,7 @@ test('tools/list advertises the site tools with annotations', async () => {
 });
 
 test('publishing a single page serves it over the path URL', async () => {
-  const { result } = await callTool(h.baseUrl, API_TOKEN, 'site_publish', {
+  const { result } = await callTool(h.baseUrl, API_TOKEN, 'site_publish', { visibility: 'public', confirm_public: true,
     slug: 'hello',
     title: 'Hello',
     html: '<!doctype html><title>Hello</title><h1>Hi there</h1>',
@@ -96,7 +96,7 @@ test('unknown subdomain and unknown slug both 404', async () => {
 });
 
 test('multi-file publish serves assets and honours the custom 404 page', async () => {
-  const { result } = await callTool(h.baseUrl, API_TOKEN, 'site_publish', {
+  const { result } = await callTool(h.baseUrl, API_TOKEN, 'site_publish', { visibility: 'public', confirm_public: true,
     slug: 'multi',
     files: [
       { path: 'index.html', content: '<link rel=stylesheet href="assets/app.css"><p>index</p>' },
@@ -152,28 +152,28 @@ test('traversal attempts cannot escape a site', async () => {
 });
 
 test('publish requires index.html and enforces limits', async () => {
-  const noIndex = await callTool(h.baseUrl, API_TOKEN, 'site_publish', {
+  const noIndex = await callTool(h.baseUrl, API_TOKEN, 'site_publish', { visibility: 'public', confirm_public: true,
     slug: 'no-index',
     files: [{ path: 'about.html', content: 'hi' }],
   });
   assert.equal(noIndex.result.isError, true);
   assert.match(textOf(noIndex.result), /index\.html/);
 
-  const tooBig = await callTool(h.baseUrl, API_TOKEN, 'site_publish', {
+  const tooBig = await callTool(h.baseUrl, API_TOKEN, 'site_publish', { visibility: 'public', confirm_public: true,
     slug: 'too-big',
     html: 'x'.repeat(6 * 1024 * 1024),
   });
   assert.equal(tooBig.result.isError, true);
   assert.match(textOf(tooBig.result), /per-file limit/);
 
-  const bothInputs = await callTool(h.baseUrl, API_TOKEN, 'site_publish', {
+  const bothInputs = await callTool(h.baseUrl, API_TOKEN, 'site_publish', { visibility: 'public', confirm_public: true,
     slug: 'both',
     html: 'x',
     files: [{ path: 'index.html', content: 'y' }],
   });
   assert.equal(bothInputs.result.isError, true);
 
-  const badPath = await callTool(h.baseUrl, API_TOKEN, 'site_publish', {
+  const badPath = await callTool(h.baseUrl, API_TOKEN, 'site_publish', { visibility: 'public', confirm_public: true,
     slug: 'bad-path',
     files: [
       { path: 'index.html', content: 'ok' },
@@ -188,7 +188,7 @@ test('publish requires index.html and enforces limits', async () => {
 });
 
 test('duplicate slug with if_exists:fail is rejected, otherwise it versions', async () => {
-  const failing = await callTool(h.baseUrl, API_TOKEN, 'site_publish', {
+  const failing = await callTool(h.baseUrl, API_TOKEN, 'site_publish', { visibility: 'public', confirm_public: true,
     slug: 'hello',
     html: '<p>v2</p>',
     if_exists: 'fail',
@@ -196,13 +196,13 @@ test('duplicate slug with if_exists:fail is rejected, otherwise it versions', as
   assert.equal(failing.result.isError, true);
   assert.match(textOf(failing.result), /already exists/);
 
-  const ok = await callTool(h.baseUrl, API_TOKEN, 'site_publish', { slug: 'hello', html: '<p>v2 body</p>' });
+  const ok = await callTool(h.baseUrl, API_TOKEN, 'site_publish', { visibility: 'public', confirm_public: true, slug: 'hello', html: '<p>v2 body</p>' });
   assert.equal(structured(ok.result).created, false);
   assert.match(await (await fetch(`${h.baseUrl}/s/hello/`)).text(), /v2 body/);
 });
 
 test('slug is derived from the title when omitted', async () => {
-  const { result } = await callTool(h.baseUrl, API_TOKEN, 'site_publish', {
+  const { result } = await callTool(h.baseUrl, API_TOKEN, 'site_publish', { visibility: 'public', confirm_public: true,
     title: 'Q3 Revenue Report',
     html: '<p>numbers</p>',
   });
@@ -254,7 +254,7 @@ test('site_list pages and reports totals', async () => {
 
 test('versions are retained up to the limit, then pruned; rollback works', async () => {
   for (const n of [3, 4, 5]) {
-    await callTool(h.baseUrl, API_TOKEN, 'site_publish', { slug: 'hello', html: `<p>v${n} body</p>` });
+    await callTool(h.baseUrl, API_TOKEN, 'site_publish', { visibility: 'public', confirm_public: true, slug: 'hello', html: `<p>v${n} body</p>` });
   }
   const versions = await callTool(h.baseUrl, API_TOKEN, 'site_list_versions', { slug: 'hello' });
   const list = structured(versions.result).versions;
@@ -271,7 +271,7 @@ test('versions are retained up to the limit, then pruned; rollback works', async
 });
 
 test('rename changes the URL and frees the old slug', async () => {
-  await callTool(h.baseUrl, API_TOKEN, 'site_publish', { slug: 'temp-name', html: '<p>renamed</p>' });
+  await callTool(h.baseUrl, API_TOKEN, 'site_publish', { visibility: 'public', confirm_public: true, slug: 'temp-name', html: '<p>renamed</p>' });
   const renamed = await callTool(h.baseUrl, API_TOKEN, 'site_rename', {
     slug: 'temp-name',
     new_slug: 'final-name',

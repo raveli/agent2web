@@ -168,7 +168,12 @@ test('full authorization code flow with PKCE, then publish with the issued token
   assert.equal(list.status, 200);
   const publish = await mcpRequest(h.baseUrl, tokens.access_token, 'tools/call', {
     name: 'site_publish',
-    arguments: { slug: 'via-oauth', html: '<p>published over oauth</p>' },
+    arguments: {
+      slug: 'via-oauth',
+      html: '<p>published over oauth</p>',
+      visibility: 'public',
+      confirm_public: true,
+    },
   });
   assert.equal(publish.result.isError, undefined);
   assert.match(await (await fetch(`${h.baseUrl}/s/via-oauth/`)).text(), /published over oauth/);

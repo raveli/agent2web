@@ -84,6 +84,26 @@ export class WebCryptoProvider {
   randomToken(bytes = 32): string {
     return toBase64Url(crypto.getRandomValues(new Uint8Array(bytes)));
   }
+
+  /**
+   * A password someone can read off a screen, say out loud and retype.
+   *
+   * Minted when a site is protected but nobody chose a password. The alphabet
+   * omits l, o, 0 and 1 — the characters people transcribe wrongly — and is
+   * exactly 32 long so that taking a byte modulo it introduces no bias. Four
+   * groups of four is 20 bits shy of a 128-bit key and far beyond what the
+   * per-site throttle will let anyone try.
+   */
+  readablePassword(groups = 4, size = 4): string {
+    const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789'; // 32 characters, no look-alikes
+    const bytes = crypto.getRandomValues(new Uint8Array(groups * size));
+    let out = '';
+    for (let i = 0; i < bytes.length; i++) {
+      if (i > 0 && i % size === 0) out += '-';
+      out += alphabet[bytes[i]! % alphabet.length];
+    }
+    return out;
+  }
 }
 
 /**

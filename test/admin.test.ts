@@ -8,7 +8,7 @@ let csrf: string;
 
 before(async () => {
   h = await startHarness();
-  await callTool(h.baseUrl, API_TOKEN, 'site_publish', { slug: 'admin-demo', html: '<p>demo</p>' });
+  await callTool(h.baseUrl, API_TOKEN, 'site_publish', { visibility: 'public', confirm_public: true, slug: 'admin-demo', html: '<p>demo</p>' });
 });
 after(async () => h.close());
 
@@ -105,7 +105,7 @@ test('a failed action reports the reason on the site page', async () => {
 });
 
 test('rollback and delete work from the admin UI', async () => {
-  await callTool(h.baseUrl, API_TOKEN, 'site_publish', { slug: 'admin-demo', html: '<p>demo v2</p>' });
+  await callTool(h.baseUrl, API_TOKEN, 'site_publish', { visibility: 'public', confirm_public: true, slug: 'admin-demo', html: '<p>demo v2</p>' });
   const versions = await h.db.all<{ id: string }>(
     'SELECT v.id FROM versions v JOIN sites s ON s.id = v.site_id WHERE s.slug = ? ORDER BY v.created_at ASC',
     'admin-demo',
