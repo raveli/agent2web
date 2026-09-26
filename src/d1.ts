@@ -37,9 +37,10 @@ export class Sql {
    * sequence agent2web needs is decided before the first write — publishing a
    * version, issuing a token pair, approving an authorization request.
    */
-  async batch(statements: Statement[]): Promise<void> {
-    if (statements.length === 0) return;
-    await this.db.batch(statements.map(s => this.bind(s.sql, s.params ?? [])));
+  async batch(statements: Statement[]): Promise<number[]> {
+    if (statements.length === 0) return [];
+    const results = await this.db.batch(statements.map(s => this.bind(s.sql, s.params ?? [])));
+    return results.map(r => Number(r.meta?.changes ?? 0));
   }
 
   private bind(sql: string, params: unknown[]): D1PreparedStatement {

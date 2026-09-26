@@ -9,9 +9,16 @@
  * Bump VERSION with package.json (a test holds them together) and add a line
  * to CHANGES whenever agent-visible behaviour changes.
  */
-export const VERSION = '0.2.0';
+export const VERSION = '0.3.0';
 
 export const CHANGES: { version: string; date: string; notes: string[] }[] = [
+  {
+    version: '0.3.0',
+    date: '2026-09-26',
+    notes: [
+      'Writes to an existing site take an optional if_version: pass the version your change is based on, and the write is refused if someone else changed the site since.',
+    ],
+  },
   {
     version: '0.2.0',
     date: '2026-09-26',

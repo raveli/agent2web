@@ -49,6 +49,15 @@ const fileSchema = z.object({
 
 const slugArg = z.string().describe('Slug of the site, as returned by site_publish or site_list.');
 
+const ifVersionArg = z
+  .string()
+  .optional()
+  .describe(
+    'The version id your change is based on (from site_get or a previous write). If the site has moved on ' +
+      'since, the write is refused with the live version and who made it, and nothing is published. Pass it ' +
+      'whenever someone else, or a scheduled task, may also be editing the site.',
+  );
+
 const stagedArg = z
   .array(z.string())
   .optional()
@@ -98,6 +107,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
         html: z.string().optional().describe('Shorthand for a single-file site: the full HTML of index.html.'),
         files: z.array(fileSchema).optional().describe('Full file set for the site. Mutually exclusive with `html`.'),
         staged: stagedArg,
+        if_version: ifVersionArg,
         note: z.string().optional().describe('Short note describing this version, shown in site_list_versions.'),
         visibility: z
           .enum(['public', 'password', 'disabled'])
@@ -142,6 +152,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
           title: args.title,
           files,
           staged: args.staged,
+          ifVersion: args.if_version,
           note: args.note,
           visibility: args.visibility as Visibility | undefined,
           password: args.password ?? null,
@@ -195,6 +206,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
         upsert: z.array(fileSchema).optional().describe('Files to add or replace.'),
         staged: stagedArg,
         remove: z.array(z.string()).optional().describe('Paths to delete from the site.'),
+        if_version: ifVersionArg,
         note: z.string().optional().describe('Short note describing this version.'),
         response_format: responseFormat,
       },
@@ -213,6 +225,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
           args.remove ?? [],
           args.note,
           args.staged ?? [],
+          args.if_version,
         );
         return ok(
           args.response_format as ResponseFormat,
@@ -255,6 +268,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
           )
           .min(1)
           .describe('Replacements to apply, in order.'),
+        if_version: ifVersionArg,
         note: z.string().optional().describe('Short note describing this version.'),
         response_format: responseFormat,
       },
@@ -262,7 +276,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
     },
     async args => {
       try {
-        const result = await store.editFile(args.slug, args.path, args.edits as FileEdit[], args.note);
+        const result = await store.editFile(args.slug, args.path, args.edits as FileEdit[], args.note, args.if_version);
         return ok(
           args.response_format as ResponseFormat,
           `Edited ${args.path} in **${result.site.slug}** (${plural(args.edits.length, 'change')}) — version \`${
@@ -304,6 +318,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
           .min(1)
           .describe('Extractions to apply, in order.'),
         overwrite: z.boolean().default(false).describe('Allow replacing a `to` file that already exists.'),
+        if_version: ifVersionArg,
         note: z.string().optional().describe('Short note describing this version.'),
         response_format: responseFormat,
       },
@@ -314,6 +329,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
         const result = await store.extractFile(args.slug, args.from, args.extractions as Extraction[], {
           note: args.note,
           overwrite: args.overwrite,
+          ifVersion: args.if_version,
         });
         const lines = result.extracted.map(f => `- ${f.path} (${formatBytes(f.bytes)})`).join('\n');
         return ok(
