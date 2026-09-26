@@ -1,8 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerSiteTools, type ToolContext } from './tools.js';
+import { VERSION, versionNote } from '../version.js';
 
 export const SERVER_NAME = 'agent2web';
-export const SERVER_VERSION = '0.1.0';
+export const SERVER_VERSION = VERSION;
 
 /**
  * Builds a fresh MCP server. The HTTP layer is stateless — one server and one
@@ -16,6 +17,7 @@ export function createMcpServer(ctx: ToolContext): McpServer {
         'agent2web hosts static websites. Use site_publish to put HTML online and get a URL back;',
         'pass the same slug again (or use site_update_files) to iterate on a site without changing its URL.',
         'Sites can be public, password protected or disabled — see site_set_access.',
+        versionNote(),
       ].join(' '),
       capabilities: { tools: {} },
     },
