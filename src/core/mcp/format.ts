@@ -95,6 +95,7 @@ export function versionSummary(version: VersionRow): Record<string, unknown> {
     bytes: version.bytes,
     file_count: version.file_count,
     created_at: new Date(version.created_at).toISOString(),
+    created_by: version.actor ? { id: version.actor, label: version.actor_label } : null,
   };
 }
 
@@ -109,5 +110,10 @@ export function siteLine(config: Config, site: SiteRow): string {
 export function versionLine(version: VersionRow, current: boolean): string {
   return `- \`${version.id}\`${current ? ' (current)' : ''} — ${formatDate(version.created_at)}, ${
     version.file_count
-  } files, ${formatBytes(version.bytes)}${version.note ? ` — ${version.note}` : ''}`;
+  } files, ${formatBytes(version.bytes)}${by(version)}${version.note ? ` — ${version.note}` : ''}`;
+}
+
+function by(version: VersionRow): string {
+  if (!version.actor) return '';
+  return `, by ${version.actor_label ? `${version.actor_label} (${version.actor})` : version.actor}`;
 }

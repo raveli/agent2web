@@ -144,6 +144,7 @@ export function siteDetailPage(
   <td>${isCurrent ? '<span class="status status-public">Live</span>' : ''}</td>
   <td class="small muted">${esc(formatDate(v.created_at))}</td>
   <td class="small">${esc(v.note || '—')}</td>
+  <td class="small muted">${esc(v.actor_label || v.actor || '—')}</td>
   <td class="num small">${v.file_count} ${v.file_count === 1 ? 'file' : 'files'}</td>
   <td class="num small">${esc(formatBytes(v.bytes))}</td>
   <td class="num">${
@@ -228,7 +229,7 @@ export function siteDetailPage(
   <p class="help">Each publish keeps the previous files. Making an older version live swaps the site back
   without republishing; the ${config.keepVersions} most recent are kept.</p>
   <div class="scroll"><table>
-    <thead><tr><th></th><th>Published</th><th>Note</th><th class="num">Files</th><th class="num">Size</th><th></th></tr></thead>
+    <thead><tr><th></th><th>Published</th><th>Note</th><th>By</th><th class="num">Files</th><th class="num">Size</th><th></th></tr></thead>
     <tbody>${versionRows}</tbody>
   </table></div>
 </div>
