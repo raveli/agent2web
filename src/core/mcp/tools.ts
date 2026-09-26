@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { decodeUtf8, toBase64 } from '../../util/bytes.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Config } from '../config.js';
-import { isTextType, type FileEdit, type InputFile, type SiteStore, type Visibility } from '../../store.js';
+import { isTextType, type Extraction, type FileEdit, type InputFile, type SiteStore, type Visibility } from '../../store.js';
 import { UserError } from '../../util/errors.js';
 import { formatBytes, plural } from '../../util/html.js';
 import { siteUrls } from '../urls.js';
@@ -58,6 +58,7 @@ const stagedArg = z
 // at all. Every write tool says how to stay under it.
 const LARGE_FILES =
   'Keep each call under about 20 KB of content: to change part of a large file use site_edit_file; ' +
+  'to split a large page into separate files use site_extract_file, which moves the text on the server; ' +
   'to send a large file whole, stage it in chunks with site_stage_file and pass its path in `staged`.';
 
 export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
@@ -267,6 +268,68 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
             result.version.id
           }\`, ${formatBytes(result.version.bytes)}.\n\n${siteUrls(config, result.site).primary}`,
           { ...siteSummary(config, result.site), version: versionSummary(result.version) },
+        );
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    'site_extract_file',
+    {
+      title: 'Split text out of a file into new files',
+      description:
+        'Moves text out of a published text file into new files on the server, without resending it. For each ' +
+        'extraction, the text strictly between `start` and the first `end` after it becomes the file `to`, and ' +
+        'the whole span, markers included, is replaced by `replace_with`. This is the cheap way to split one ' +
+        'large page into separate CSS, JS and data files: e.g. start "<style>", end "</style>", to "styles.css", ' +
+        'replace_with \'<link rel="stylesheet" href="styles.css">\'. Extractions apply in order, and all of ' +
+        'them publish as one version; if any fails, nothing is published.',
+      inputSchema: {
+        slug: slugArg,
+        from: z.string().default('index.html').describe('File to split, e.g. "index.html".'),
+        extractions: z
+          .array(
+            z.object({
+              to: z.string().describe('Path of the new file, e.g. "styles.css" or "data.json".'),
+              start: z.string().describe('Exact text just before the part to move. Must occur once.'),
+              end: z.string().describe('Exact text just after it; the first occurrence after `start` is used.'),
+              replace_with: z
+                .string()
+                .describe('What replaces start, the moved text and end in the source. Empty removes them.'),
+            }),
+          )
+          .min(1)
+          .describe('Extractions to apply, in order.'),
+        overwrite: z.boolean().default(false).describe('Allow replacing a `to` file that already exists.'),
+        note: z.string().optional().describe('Short note describing this version.'),
+        response_format: responseFormat,
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async args => {
+      try {
+        const result = await store.extractFile(args.slug, args.from, args.extractions as Extraction[], {
+          note: args.note,
+          overwrite: args.overwrite,
+        });
+        const lines = result.extracted.map(f => `- ${f.path} (${formatBytes(f.bytes)})`).join('\n');
+        return ok(
+          args.response_format as ResponseFormat,
+          `Split ${args.from} in **${result.site.slug}** — version \`${result.version.id}\`:\n${lines}\n\n${
+            siteUrls(config, result.site).primary
+          }`,
+          {
+            ...siteSummary(config, result.site),
+            version: versionSummary(result.version),
+            extracted: result.extracted,
+          },
+          gatedSubresourceWarnings(
+            config,
+            result.site,
+            (await store.listFiles(result.version.id)).map(f => f.path),
+          ),
         );
       } catch (err) {
         return fail(err);

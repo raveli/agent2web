@@ -53,6 +53,9 @@ export type InputFile = { path: string; content: string; encoding?: 'utf8' | 'ba
 /** One exact-text replacement, in the spirit of an editor's find-and-replace. */
 export type FileEdit = { old_text: string; new_text: string; replace_all?: boolean };
 
+/** Moves the text between two markers of a file into a file of its own. */
+export type Extraction = { to: string; start: string; end: string; replace_with: string };
+
 type PreparedFile = { path: string; data: Uint8Array; contentType: string; sha256: string };
 
 export type PublishOptions = {
@@ -391,6 +394,72 @@ export class SiteStore {
         : text.replace(edit.old_text, () => edit.new_text);
     });
     return this.updateFiles(slug, [{ path: file.path, content: text, encoding: 'utf8' }], [], note);
+  }
+
+  /**
+   * Splits text out of one file into new files on the server, so turning a
+   * single large page into separate HTML, CSS, JS and data files costs a few
+   * markers instead of retyping every byte. For each extraction, the text
+   * strictly between `start` and the first `end` after it becomes the file
+   * `to`, and the whole span, markers included, is replaced by `replace_with`
+   * (typically a <link> or <script src>). All extractions and the rewritten
+   * source land in one version; if any fails, nothing is published.
+   */
+  async extractFile(
+    slug: string,
+    fromPath: string,
+    extractions: Extraction[],
+    options: { note?: string; overwrite?: boolean } = {},
+  ): Promise<PublishResult & { extracted: { path: string; bytes: number }[] }> {
+    if (extractions.length === 0) throw new UserError('Pass at least one extraction.');
+    const site = await this.requireSite(slug);
+    const file = await this.readSiteFile(slug, fromPath, undefined, Infinity);
+    if (!isTextType(file.contentType)) {
+      throw new UserError(`${file.path} is ${file.contentType}, not text, so it cannot be split.`);
+    }
+    const existing = new Set((await this.listFiles(site.current_version_id!)).map(f => f.path));
+    const targets = new Set<string>();
+    let text = decodeUtf8(file.data);
+    const out: InputFile[] = [];
+
+    extractions.forEach((x, i) => {
+      const label = extractions.length > 1 ? `Extraction ${i + 1}: ` : '';
+      const to = normalizeSitePath(x.to);
+      if (to === file.path) throw new UserError(`${label}"to" must differ from the source file.`);
+      if (targets.has(to)) throw new UserError(`${label}${to} is extracted to twice in one call.`);
+      if (existing.has(to) && !options.overwrite) {
+        throw new UserError(`${label}${to} already exists. Pass overwrite:true to replace it. Nothing was changed.`);
+      }
+      if (x.start === '' || x.end === '') throw new UserError(`${label}start and end must not be empty.`);
+      const count = text.split(x.start).length - 1;
+      if (count !== 1) {
+        throw new UserError(
+          count === 0
+            ? `${label}start was not found in ${file.path}. It must match exactly, whitespace included — re-read it with site_read_file. Nothing was changed.`
+            : `${label}start occurs ${count} times in ${file.path}. Include more surrounding text so it is unique. Nothing was changed.`,
+        );
+      }
+      const from = text.indexOf(x.start);
+      const bodyStart = from + x.start.length;
+      const bodyEnd = text.indexOf(x.end, bodyStart);
+      if (bodyEnd === -1) {
+        throw new UserError(`${label}end was not found after start in ${file.path}. Nothing was changed.`);
+      }
+      targets.add(to);
+      out.push({ path: to, content: text.slice(bodyStart, bodyEnd), encoding: 'utf8' });
+      text = text.slice(0, from) + x.replace_with + text.slice(bodyEnd + x.end.length);
+    });
+
+    const result = await this.updateFiles(
+      slug,
+      [{ path: file.path, content: text, encoding: 'utf8' }, ...out],
+      [],
+      options.note,
+    );
+    return {
+      ...result,
+      extracted: out.map(f => ({ path: f.path, bytes: new TextEncoder().encode(f.content).byteLength })),
+    };
   }
 
   // ---------------------------------------------------------------- staging
