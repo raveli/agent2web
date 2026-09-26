@@ -122,6 +122,7 @@ claude mcp add --transport http agent2web https://your-worker/mcp \
 | `site_publish` | Publishes `html` (single page) or `files` (multi-file, needs `index.html`). Same slug again → new version, same URL. Password protected unless you pass `visibility:"public"` **and** `confirm_public:true`; supply a `password` or let one be generated and returned once. |
 | `site_update_files` | Adds/replaces/removes individual files, carrying the rest over. For iterating on big sites. |
 | `site_edit_file` | Find-and-replace inside one published text file, sending only the changed text. For large pages. |
+| `site_extract_file` | Moves text between two markers of a published file into a new file, on the server. For splitting a large page into CSS, JS and data files. |
 | `site_stage_file` | Uploads a file too big for one tool call in chunks; publish it via `staged` on `site_publish`/`site_update_files`. |
 | `site_list` | Lists sites with URLs and access state. Paginated. |
 | `site_get` | One site: URLs, access, versions, file list. |
