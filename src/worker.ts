@@ -6,6 +6,7 @@ import { purgeOAuth } from './oauth.js';
 import { purgeAttempts } from './core/throttle.js';
 import { Sql } from './d1.js';
 import { createApp, type Bindings } from './http/app.js';
+import { purgeStaging } from './store.js';
 import { readPublicUrl } from './public-url.js';
 import { onceUntilSuccess } from './util/once.js';
 
@@ -78,19 +79,39 @@ export default {
     return cached.app.fetch(request, env, ctx as never);
   },
 
-  /** Wired to a cron trigger; expired rows are only ever garbage. */
+  /**
+   * Wired to a cron trigger; expired rows and abandoned uploads are only ever
+   * garbage. Each job runs and logs on its own, so one failing cannot silently
+   * skip the others.
+   */
   async scheduled(_event: unknown, env: Bindings, ctx: ExecutionContext): Promise<void> {
     const sql = new Sql(env.DB);
     ctx.waitUntil(
       (async () => {
-        await migrate(sql);
-        await purgeOAuth(sql);
-        await purgeAttempts(sql);
+        try {
+          await migrate(sql);
+        } catch (err) {
+          console.error('[cron] migration failed; skipping database jobs', err);
+          await runJob('purge staging', () => purgeStaging(env.BLOBS));
+          return;
+        }
+        await runJob('purge oauth', () => purgeOAuth(sql));
+        await runJob('purge attempts', () => purgeAttempts(sql));
+        await runJob('purge staging', () => purgeStaging(env.BLOBS));
       })(),
     );
   },
 };
 
+
+async function runJob(name: string, job: () => Promise<unknown>): Promise<void> {
+  try {
+    const result = await job();
+    console.log(`[cron] ${name}: ok${typeof result === 'number' ? ` (${result} removed)` : ''}`);
+  } catch (err) {
+    console.error(`[cron] ${name} failed`, err);
+  }
+}
 
 function plain(body: string, status: number): Response {
   return new Response(body, { status, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
