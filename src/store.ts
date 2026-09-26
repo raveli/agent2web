@@ -82,6 +82,8 @@ export type PublishOptions = {
   staged?: string[];
   /** Files of the current version to copy into the new one unchanged (updateFiles). */
   carry?: CarriedFile[];
+  /** Only publish if the site's live version is still this one (optimistic concurrency). */
+  ifVersion?: string;
   note?: string;
   visibility?: Visibility;
   password?: string | null;
@@ -271,6 +273,11 @@ export class SiteStore {
     let site = options.slug ? await this.getSiteBySlug(options.slug) : undefined;
     let created = false;
 
+    if (options.ifVersion !== undefined) {
+      if (!site) throw new UserError(`if_version was given, but there is no site "${options.slug}" yet.`, 404);
+      if (site.current_version_id !== options.ifVersion) throw await this.versionConflict(site, options.ifVersion);
+    }
+
     if (site && options.ifExists === 'fail') {
       throw new UserError(
         `Site "${site.slug}" already exists. Pass a different slug, or if_exists:"new_version" to publish over it.`,
@@ -347,6 +354,7 @@ export class SiteStore {
     remove: string[],
     note?: string,
     staged: string[] = [],
+    ifVersion?: string,
   ): Promise<PublishResult> {
     const site = await this.requireSite(slug);
     if (!site.current_version_id) {
@@ -354,7 +362,7 @@ export class SiteStore {
     }
     if (staged.length) {
       const loaded = await this.loadStaged(site.slug, staged);
-      const result = await this.updateFiles(slug, [...upsert, ...loaded], remove, note);
+      const result = await this.updateFiles(slug, [...upsert, ...loaded], remove, note, [], ifVersion);
       await this.clearStaged(site.slug, staged);
       return result;
     }
@@ -389,7 +397,7 @@ export class SiteStore {
     if (carry.length === 0 && upserted.length === 0) {
       throw new UserError('That would delete every file. Use site_delete to remove the site.');
     }
-    return this.publish({ slug: site.slug, files: upsert, carry, note, ifExists: 'new_version' });
+    return this.publish({ slug: site.slug, files: upsert, carry, note, ifExists: 'new_version', ifVersion });
   }
 
   /**
@@ -397,7 +405,13 @@ export class SiteStore {
    * publishes the result, so a change costs the size of the change rather than
    * the size of the file. Every edit must apply or none do.
    */
-  async editFile(slug: string, filePath: string, edits: FileEdit[], note?: string): Promise<PublishResult> {
+  async editFile(
+    slug: string,
+    filePath: string,
+    edits: FileEdit[],
+    note?: string,
+    ifVersion?: string,
+  ): Promise<PublishResult> {
     if (edits.length === 0) throw new UserError('Pass at least one edit.');
     const file = await this.readSiteFile(slug, filePath, undefined, Infinity);
     if (!isTextType(file.contentType)) {
@@ -425,7 +439,7 @@ export class SiteStore {
         ? text.split(edit.old_text).join(edit.new_text)
         : text.replace(edit.old_text, () => edit.new_text);
     });
-    return this.updateFiles(slug, [{ path: file.path, content: text, encoding: 'utf8' }], [], note);
+    return this.updateFiles(slug, [{ path: file.path, content: text, encoding: 'utf8' }], [], note, [], ifVersion);
   }
 
   /**
@@ -441,7 +455,7 @@ export class SiteStore {
     slug: string,
     fromPath: string,
     extractions: Extraction[],
-    options: { note?: string; overwrite?: boolean } = {},
+    options: { note?: string; overwrite?: boolean; ifVersion?: string } = {},
   ): Promise<PublishResult & { extracted: { path: string; bytes: number }[] }> {
     if (extractions.length === 0) throw new UserError('Pass at least one extraction.');
     const site = await this.requireSite(slug);
@@ -487,6 +501,8 @@ export class SiteStore {
       [{ path: file.path, content: text, encoding: 'utf8' }, ...out],
       [],
       options.note,
+      [],
+      options.ifVersion,
     );
     return {
       ...result,
@@ -644,9 +660,41 @@ export class SiteStore {
       if (options.visibility === 'public') sets.push('password_hash = NULL');
     }
     params.push(site.id);
-    statements.push(stmt(`UPDATE sites SET ${sets.join(', ')} WHERE id = ?`, ...params));
+    if (options.ifVersion === undefined) {
+      statements.push(stmt(`UPDATE sites SET ${sets.join(', ')} WHERE id = ?`, ...params));
+      await this.sql.batch(statements);
+      return;
+    }
 
-    await this.sql.batch(statements);
+    // Compare-and-swap. The pointer moves first, and only if it still points
+    // at if_version; every insert after it is conditional on that move having
+    // happened. D1 runs a batch as one transaction, so a concurrent write that
+    // got in first makes this whole batch a no-op rather than a second winner.
+    const moved = `EXISTS (SELECT 1 FROM sites WHERE id = ? AND current_version_id = ?)`;
+    const guarded = statements.map(s => ({
+      sql: s.sql.replace(/VALUES \(([^)]*)\)\s*$/, `SELECT $1 WHERE ${moved}`),
+      params: [...(s.params ?? []), site.id, versionId],
+    }));
+    const changes = await this.sql.batch([
+      stmt(`UPDATE sites SET ${sets.join(', ')} WHERE id = ? AND current_version_id = ?`, ...params, options.ifVersion),
+      ...guarded,
+    ]);
+    if (changes[0] !== 1) {
+      throw await this.versionConflict((await this.getSiteById(site.id))!, options.ifVersion);
+    }
+  }
+
+  /** The 409 for a write based on a version that is no longer live. */
+  private async versionConflict(site: SiteRow, expected: string): Promise<UserError> {
+    const live = site.current_version_id ? await this.getVersion(site.id, site.current_version_id) : undefined;
+    const who = live?.actor ? ` by ${live.actor_label ? `${live.actor_label} (${live.actor})` : live.actor}` : '';
+    const when = live ? ` at ${new Date(live.created_at).toISOString()}` : '';
+    return new UserError(
+      `"${site.slug}" has moved on: the live version is ${site.current_version_id ?? 'none'}, created${who}${when}, ` +
+        `not ${expected}. Nothing was published. Re-read the site, re-apply your change on top of the live ` +
+        `version, and retry with if_version:"${site.current_version_id}".`,
+      409,
+    );
   }
 
   private async allocateSlug(requested: string | undefined, title: string | undefined) {
