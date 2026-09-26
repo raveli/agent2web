@@ -106,7 +106,7 @@ export const MIGRATIONS: string[][] = [
        expires_at INTEGER NOT NULL
      )`,
   ],
-  // 5 — who created each version (backlog #16). The first ALTER TABLE, which
+  // 3 — who created each version (backlog #16). The first ALTER TABLE, which
   //     is why migrate() takes a lock: ADD COLUMN cannot be made idempotent.
   [
     `ALTER TABLE versions ADD COLUMN actor TEXT`,
