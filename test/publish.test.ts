@@ -27,6 +27,7 @@ test('tools/list advertises the site tools with annotations', async () => {
     'site_edit_file',
     'site_extract_file',
     'site_stage_file',
+    'site_check',
     'site_list',
     'site_get',
     'site_read_file',

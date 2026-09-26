@@ -13,6 +13,7 @@ import {
   versionPrefix,
 } from './core/paths.js';
 import { decodeUtf8 } from './util/bytes.js';
+import { findMissingReferences, type CheckFile } from './core/check.js';
 import { UserError } from './util/errors.js';
 import { isValidSlug, newId, RESERVED_SLUGS, slugify } from './util/ids.js';
 
@@ -508,6 +509,31 @@ export class SiteStore {
       ...result,
       extracted: out.map(f => ({ path: f.path, bytes: new TextEncoder().encode(f.content).byteLength })),
     };
+  }
+
+  /**
+   * The files of a version, and the references among them that point at files
+   * the version does not have. Reads only the HTML and CSS, the files that can
+   * reference others.
+   */
+  async checkSite(slug: string, versionId?: string) {
+    const site = await this.requireSite(slug);
+    const version = versionId ?? site.current_version_id;
+    if (!version || !(await this.getVersion(site.id, version))) {
+      throw new UserError(`Version "${version ?? 'none'}" not found for "${slug}".`, 404);
+    }
+    const files = await this.listFiles(version);
+    const inputs: CheckFile[] = [];
+    for (const row of files) {
+      const scanned = row.content_type.startsWith('text/html') || row.content_type.startsWith('text/css');
+      let text: string | undefined;
+      if (scanned) {
+        const object = await this.blobs.get(blobKey(site.id, version, row.path));
+        text = object ? decodeUtf8(new Uint8Array(await object.arrayBuffer())) : undefined;
+      }
+      inputs.push({ path: row.path, contentType: row.content_type, text });
+    }
+    return { site, versionId: version, files, missing: findMissingReferences(inputs) };
   }
 
   // ---------------------------------------------------------------- staging

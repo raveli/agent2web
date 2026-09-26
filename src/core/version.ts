@@ -17,6 +17,7 @@ export const CHANGES: { version: string; date: string; notes: string[] }[] = [
     date: '2026-09-26',
     notes: [
       'Writes to an existing site take an optional if_version: pass the version your change is based on, and the write is refused if someone else changed the site since.',
+      'site_check reports whether a site is complete: missing files its HTML or CSS refers to, and each file\'s sha256 to compare with your local copies.',
     ],
   },
   {
