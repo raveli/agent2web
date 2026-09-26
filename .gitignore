@@ -11,3 +11,7 @@ data/
 # wrangler dev state and local secrets
 .wrangler/
 .dev.vars
+
+# Your own deployment's settings, for npm run deploy:live
+deploy.local.json
+wrangler.live.json
