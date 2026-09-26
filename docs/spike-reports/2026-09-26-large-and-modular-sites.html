@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Large and modular sites</title>
+<style>
+  :root { color-scheme: light; }
+  body {
+    margin: 0; padding: 2em 16px 4em; background: #fff; color: #111;
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 44em; margin: 0 auto; }
+  p, li { max-width: 70ch; }
+  h1 { font-size: 1.9em; line-height: 1.2; margin: 0 0 .2em; }
+  .meta { color: #555; margin: 0 0 1.5em; }
+  h2 { border-top: 2px solid #111; padding-top: .6em; margin-top: 2.2em; font-size: 1.35em; }
+  h3 { font-size: 1.1em; margin-top: 1.6em; }
+  a { color: #0645ad; text-decoration: underline; text-underline-offset: .15em; }
+  :focus-visible { outline: 2px solid #0645ad; outline-offset: 2px; }
+  code, pre { background: #f2f2f2; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em; }
+  code { padding: .1em .3em; }
+  pre { padding: .8em 1em; overflow-x: auto; line-height: 1.45; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; font-variant-numeric: tabular-nums; }
+  th, td { border: 1px solid #bbb; padding: .4em .6em; text-align: left; vertical-align: top; }
+  th { background: #f2f2f2; }
+  .note, .ok, .danger { border: 1px solid; padding: .6em 1em; margin: 1em 0; }
+  .note { background: #fff8e1; border-color: #b8860b; }
+  .ok { background: #eef6ee; border-color: #1a7f37; }
+  .danger { background: #fdecea; border-color: #b71c1c; }
+  nav ul { padding-left: 1.2em; }
+  details { margin: 1em 0; }
+  summary { cursor: pointer; font-weight: 600; }
+  footer { border-top: 1px solid #ddd; margin-top: 3em; padding-top: .8em; color: #555; font-size: .9em; }
+</style>
+</head>
+<body>
+<main>
+<h1>Large and modular sites</h1>
+<p class="meta">agent2web · 2026-09-26 · commits <code>8373fef</code> and <code>503124f</code> on <code>claude/static-html-mcp-hosting-ufkmai</code> · not yet deployed</p>
+
+<p><strong>In short:</strong> a password-protected site could not be updated once its <code>index.html</code> reached 56 KB. Agents can now change part of a file, or upload a file in pieces, and locked sites can be split into separate CSS, JS and HTML files on their own hostname. All 131 tests pass, and the modular case was checked in a real Chromium browser.</p>
+
+<nav aria-label="On this page">
+<strong>On this page</strong>
+<ul>
+  <li><a href="#failure">What failed</a></li>
+  <li><a href="#cause">Two causes</a></li>
+  <li><a href="#large">Change 1: large files</a></li>
+  <li><a href="#modular">Change 2: modular locked sites</a></li>
+  <li><a href="#verify">Verify it yourself</a></li>
+  <li><a href="#limits">Known limits</a></li>
+  <li><a href="#next">Next steps</a></li>
+</ul>
+</nav>
+
+<h2 id="failure">What failed</h2>
+<p>An agent tried to update a locked site whose <code>index.html</code> had grown to 56 KB. Three attempts through <code>site_update_files</code> (base64, raw UTF-8, minified) were each cut off at about 39 KB. The agent rolled back to the last good version, and nothing broken went live.</p>
+
+<h2 id="cause">Two causes</h2>
+<table>
+  <tr><th>Cause</th><th>What was actually true</th></tr>
+  <tr>
+    <td>The size of a single call</td>
+    <td>The server accepts 5 MB per file. The ~39 KB limit belongs to the calling agent, which caps how much it can send in one tool call. Raising server limits cannot fix this. The only fix is for no write to need the whole file in one call.</td>
+  </tr>
+  <tr>
+    <td>Why the file was so large</td>
+    <td>The publish warning told agents to inline all CSS and JS into one file for <em>every</em> password-protected site. That is only needed on path URLs (<code>/s/&lt;slug&gt;/</code>), where the page is sandboxed. On the site's own hostname, separate files work. So pages grew for no reason.</td>
+  </tr>
+</table>
+
+<h2 id="large">Change 1: large files</h2>
+<table>
+  <tr><th>Tool</th><th>What it does</th><th>When to use it</th></tr>
+  <tr>
+    <td><code>site_edit_file</code> (new)</td>
+    <td>Exact find-and-replace inside one published text file, published as a new version. Each <code>old_text</code> must match exactly and appear once, unless <code>replace_all</code> is set. If any edit fails, nothing is published.</td>
+    <td>Changing part of a large page. The call is only as big as the change.</td>
+  </tr>
+  <tr>
+    <td><code>site_stage_file</code> (new)</td>
+    <td>Uploads a file in pieces to a staging area that is never served. Send the first piece with <code>append:false</code>, then the rest with <code>append:true</code>.</td>
+    <td>Replacing a large file whole, or a first publish of one.</td>
+  </tr>
+  <tr>
+    <td><code>staged</code> argument on <code>site_publish</code> / <code>site_update_files</code></td>
+    <td>Publishes the named staged files, then clears them.</td>
+    <td>The step that makes a staged file live.</td>
+  </tr>
+</table>
+<p>All write tools now tell agents to keep each call under about 20 KB and name both routes.</p>
+
+<details>
+<summary>Design in one sentence, with the code</summary>
+<p><strong>Every write goes through the existing <code>updateFiles</code> → <code>publish</code> path, so edits and staged uploads get the same guarantee as before: all objects are written before the site's version pointer moves, in one batch.</strong> Staging lives under <code>staging/&lt;slug&gt;/</code> in R2, outside <code>sites/</code>, and is keyed by slug so a site can be assembled before it exists.</p>
+<pre><code>// src/store.ts: editFile, core loop
+edits.forEach((edit, i) =&gt; {
+  const count = text.split(edit.old_text).length - 1;
+  if (count === 0) throw new UserError(`${label}old_text was not found ... Nothing was changed.`);
+  if (count &gt; 1 &amp;&amp; !edit.replace_all) throw new UserError(`${label}old_text occurs ${count} times ...`);
+  // A function replacement, so "$&amp;" and friends in new_text stay literal.
+  text = edit.replace_all
+    ? text.split(edit.old_text).join(edit.new_text)
+    : text.replace(edit.old_text, () =&gt; edit.new_text);
+});
+return this.updateFiles(slug, [{ path: file.path, content: text, encoding: 'utf8' }], [], note);
+
+// src/store.ts: updateFiles, staged branch
+if (staged.length) {
+  const loaded = await this.loadStaged(site.slug, staged);
+  const result = await this.updateFiles(slug, [...upsert, ...loaded], remove, note);
+  await this.clearStaged(site.slug, staged);   // only after a successful publish
+  return result;
+}</code></pre>
+<p>Base64 pieces must each be a multiple of 4 characters long. <code>atob</code> accepts missing padding, so a piece split mid-group would silently lose bits instead of failing.</p>
+</details>
+
+<h2 id="modular">Change 2: modular locked sites</h2>
+<p>A locked page on a path URL gets a <code>sandbox</code> CSP. The sandbox gives it an opaque origin, and an opaque origin sends no cookies with CSS, JS or image requests, so those requests fail. On <code>&lt;slug&gt;.&lt;A2W_SITES_BASE_DOMAIN&gt;</code> or a custom domain there is no sandbox: same-origin files carry the unlock cookie like the page itself does.</p>
+<ul>
+  <li><strong>Warning:</strong> fires only when a locked site has no hostname of its own, or when <code>A2W_SITE_SANDBOX=always</code>.</li>
+  <li><strong>Redirect:</strong> a GET to the path URL of a locked site that has a hostname returns 302 to the hostname, keeping path and query. No link lands on the version where assets fail. Public sites still answer on the path URL.</li>
+  <li><strong>Guidance:</strong> <code>site_publish</code> tells agents which case applies. With hostnames, prefer small separate files. Without them, inline.</li>
+</ul>
+
+<div class="ok"><strong>Verified:</strong> Chromium opened <code>/s/modular/</code>, was redirected to <code>modular.localhost</code>, and was unlocked with the password. <code>app.css</code> and <code>js/app.js</code> both answered 200, the style applied and the script ran.</div>
+
+<details>
+<summary>Design in one sentence, with the code</summary>
+<p><strong>One predicate, <code>hasOwnOrigin</code>, decides whether a site can load its own files. The warning and the redirect both use it, so they can't disagree.</strong></p>
+<pre><code>// src/core/urls.ts
+export function hasOwnOrigin(config, site) {
+  if (config.siteSandbox === 'always') return false;
+  const urls = siteUrls(config, site);
+  return Boolean(urls.custom ?? urls.subdomain);
+}
+
+// src/http/hosting.ts: before the password gate
+if (site.visibility === 'password' &amp;&amp; !target.hostBased &amp;&amp;
+    (c.req.method === 'GET' || c.req.method === 'HEAD') &amp;&amp; hasOwnOrigin(config, site)) {
+  const home = siteUrls(config, site).primary.replace(/\/$/, '');
+  return c.redirect(`${home}${rest}${new URL(c.req.url).search}`, 302);
+}</code></pre>
+</details>
+
+<h2 id="verify">Verify it yourself</h2>
+<h3>1. Run the suite</h3>
+<pre><code>npm test 2&gt;&amp;1 | grep -E "^# (tests|pass|fail)"</code></pre>
+<p>Expected:</p>
+<pre><code># tests 131
+# pass 131
+# fail 0</code></pre>
+<p>New tests are in <code>test/large-files.test.ts</code> (pieced uploads, edits, failures that publish nothing, base64 boundaries) and <code>test/modular-locked.test.ts</code> (no warning, no sandbox, assets load once unlocked, redirect, public path still works).</p>
+
+<h3>2. After deploying, check the redirect</h3>
+<p>Use a password-protected site that has its own hostname.</p>
+<pre><code>curl -sI https://&lt;your-app-host&gt;/s/&lt;locked-slug&gt;/app.css | grep -iE "^(HTTP|location)"</code></pre>
+<p>Expected:</p>
+<pre><code>HTTP/2 302
+location: https://&lt;locked-slug&gt;.&lt;base-domain&gt;/app.css</code></pre>
+
+<h3>3. After deploying, check the new tools are listed</h3>
+<p>Reconnect the MCP client and ask it to list agent2web tools. <code>site_edit_file</code> and <code>site_stage_file</code> should appear, and the <code>site_publish</code> description should say to prefer several small files.</p>
+
+<h3>4. Try a modular locked site</h3>
+<p>Publish a test site with a password and three files (<code>index.html</code> linking <code>app.css</code> and <code>js/app.js</code>). The response should carry <em>no</em> warning. Open the hostname URL, enter the password, and the styles and script should apply.</p>
+
+<h2 id="limits">Known limits</h2>
+<div class="note">
+<p><strong>Note:</strong> these are the limits that remain after both changes.</p>
+<ul>
+  <li>A self-hosted install with no <code>A2W_SITES_BASE_DOMAIN</code> and no custom domain only has path URLs. Locked sites there must still be single-file, and the warning and tool guidance say so.</li>
+  <li>Staged files that are never published stay in R2 until they are overwritten, or until their site is deleted. Nothing expires them automatically.</li>
+  <li><code>site_edit_file</code> works on the current version only. If two agents edit at once, the second edit applies on top of the first, or fails if its text no longer matches.</li>
+</ul>
+</div>
+
+<h2 id="next">Next steps</h2>
+<ol>
+  <li>Deploy: <code>npm run deploy</code>.</li>
+  <li>Reconnect the MCP client so it sees the new tools.</li>
+  <li>Split the affected site's single <code>index.html</code> into separate HTML, CSS and JS files, and reapply the change that failed on top of its last good version.</li>
+</ol>
+
+<footer>Written by Claude. The source is in <code>src/store.ts</code>, <code>src/core/mcp/tools.ts</code>, <code>src/core/urls.ts</code> and <code>src/http/hosting.ts</code>.</footer>
+</main>
+</body>
+</html>
