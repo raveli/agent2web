@@ -59,6 +59,11 @@ function htmlReferences(text: string): string[] {
     const lt = text.indexOf('<', i);
     if (lt === -1) break;
     if (text.startsWith('<!--', lt)) {
+      // "<!-->" and "<!--->" are complete, empty comments.
+      if (text.startsWith('>', lt + 4) || text.startsWith('->', lt + 4)) {
+        i = text.indexOf('>', lt + 4) + 1;
+        continue;
+      }
       const end = text.indexOf('-->', lt + 4);
       if (end === -1) break;
       i = end + 3;
@@ -79,7 +84,7 @@ function htmlReferences(text: string): string[] {
       // Everything up to the closing tag is text, not markup, even if the
       // opening tag was written "<style/>". Unclosed, it runs to the end.
       const close = findClosingTag(text, name, i);
-      if (name === 'style') out.push(...cssReferences(text.slice(i, close === -1 ? text.length : close)));
+      if (name === 'style') append(out, cssReferences(text.slice(i, close === -1 ? text.length : close)));
       if (close === -1) break;
       const closeEnd = text.indexOf('>', close);
       if (closeEnd === -1) break;
@@ -170,8 +175,8 @@ function collectAttributes(inside: string, out: string[]): void {
     }
     value = decodeEntities(value).trim();
     if (URL_ATTRIBUTES.has(name)) out.push(value);
-    else if (name === 'srcset') out.push(...srcsetUrls(value));
-    else if (name === 'style') out.push(...cssReferences(value));
+    else if (name === 'srcset') append(out, srcsetUrls(value));
+    else if (name === 'style') append(out, cssReferences(value));
   }
 }
 
@@ -296,6 +301,11 @@ function decodeEntities(value: string): string {
     }
     return ENTITIES[body.toLowerCase()] ?? whole;
   });
+}
+
+/** push(...items) passes each item as an argument, and overflows the stack past ~100k. */
+function append(out: string[], items: string[]): void {
+  for (const item of items) out.push(item);
 }
 
 function isSpace(c: number): boolean {
