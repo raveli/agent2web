@@ -401,8 +401,10 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
         'Reports whether a published site is complete: every file with its size, content type and sha256, and ' +
         'any file its HTML (href, src) or CSS (url()) refers to that the site does not have. Use it after a ' +
         'publish, split or removal, and compare the sha256 values with your local files instead of reading ' +
-        'the site back. Works from the stored files, so it needs no password for a locked site. It cannot see ' +
-        'URLs that JavaScript builds at runtime, such as fetch(url).',
+        'the site back. Works from the stored files, so it needs no password for a locked site. It reads href, ' +
+        'src, srcset and poster on HTML tags and url() and @import in CSS, inline styles included. It cannot see ' +
+        'URLs that JavaScript builds at runtime, such as fetch(url), references inside SVG files, or <base> ' +
+        'resolution.',
       inputSchema: {
         slug: slugArg,
         version_id: z.string().optional().describe('Check a specific version instead of the live one.'),
@@ -416,13 +418,15 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
         const paths = result.files.map(f => f.path);
         const hasIndex = paths.includes('index.html');
         const warnings = gatedSubresourceWarnings(config, result.site, paths);
-        const isOk = hasIndex && result.missing.length === 0 && warnings.length === 0;
+        const isOk =
+          hasIndex && result.missing.length === 0 && result.unreadable.length === 0 && warnings.length === 0;
         const structured = {
           slug: result.site.slug,
           version_id: result.versionId,
           ok: isOk,
           has_index: hasIndex,
           missing: result.missing,
+          unreadable: result.unreadable,
           files: result.files.map(f => ({
             path: f.path,
             bytes: f.bytes,
@@ -436,6 +440,9 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
             'file',
           )}.`,
           hasIndex ? '' : 'There is no index.html, so the root URL returns 404.',
+          result.unreadable.length
+            ? `Recorded in this version but missing from storage, so they cannot be served: ${result.unreadable.join(', ')}.`
+            : '',
           result.missing.length
             ? `Missing references:\n${result.missing.map(m => `- ${m.file} → ${m.resolved}`).join('\n')}`
             : 'No missing references.',
