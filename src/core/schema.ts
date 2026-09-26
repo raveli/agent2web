@@ -1,4 +1,5 @@
 import type { Sql } from '../d1.js';
+import { newId } from '../util/ids.js';
 
 /**
  * The schema, as ordered migrations of individual statements.
@@ -109,27 +110,78 @@ export const MIGRATIONS: string[][] = [
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
 
-/** Applies any migrations this database has not seen yet. */
-export async function migrate(db: Sql): Promise<number> {
-  const from = await currentVersion(db);
-  if (from >= SCHEMA_VERSION) return from;
+const META_TABLE = `CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`;
 
-  for (let version = from + 1; version <= SCHEMA_VERSION; version++) {
-    for (const statement of MIGRATIONS[version - 1]!) await db.run(statement);
+/** How long a migration lock is honoured before another isolate may take it over. */
+const LOCK_TTL_MS = 30_000;
+
+export type MigrateOptions = {
+  /** How long a loser waits for the lock holder to finish before giving up. */
+  waitMs?: number;
+  pollMs?: number;
+};
+
+/**
+ * Applies any migrations this database has not seen yet, one isolate at a time.
+ *
+ * Cold isolates start together, and each used to run the pending migrations
+ * itself. That was harmless only while every statement was CREATE ... IF NOT
+ * EXISTS; SQLite has no ADD COLUMN IF NOT EXISTS, so the first ALTER TABLE would
+ * fail in every isolate but the fastest. Now one isolate takes a lock row, and
+ * the others wait for the schema version to catch up.
+ *
+ * The lock is a row holding an expiry and a random token. D1 serialises
+ * writes, so the conditional upsert that takes it cannot be won twice, and an
+ * isolate that died holding it only blocks others until the expiry.
+ */
+export async function migrate(
+  db: Sql,
+  migrations: string[][] = MIGRATIONS,
+  options: MigrateOptions = {},
+): Promise<number> {
+  const target = migrations.length;
+  const waitMs = options.waitMs ?? 20_000;
+  const pollMs = options.pollMs ?? 200;
+  await db.run(META_TABLE);
+  if ((await currentVersion(db)) >= target) return target;
+
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    const token = newId(16);
+    const now = Date.now();
+    const acquired = await db.changes(
+      `INSERT INTO schema_meta (key, value) VALUES ('migration_lock', ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value
+         WHERE CAST(substr(schema_meta.value, 1, instr(schema_meta.value, ':') - 1) AS INTEGER) < ?`,
+      `${now + LOCK_TTL_MS}:${token}`,
+      now,
+    );
+    if (acquired === 1) {
+      try {
+        // Another isolate may have finished between our check and the lock.
+        const from = await currentVersion(db);
+        for (let version = from + 1; version <= target; version++) {
+          for (const statement of migrations[version - 1]!) await db.run(statement);
+          await db.run(
+            `INSERT INTO schema_meta (key, value) VALUES ('version', ?)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+            String(version),
+          );
+        }
+        return target;
+      } finally {
+        await db.run(`DELETE FROM schema_meta WHERE key = 'migration_lock' AND value LIKE ?`, `%:${token}`);
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, pollMs));
+    if ((await currentVersion(db)) >= target) return target;
+    if (Date.now() > deadline) {
+      throw new Error('Timed out waiting for another isolate to finish migrating the database.');
+    }
   }
-  await db.run(
-    `CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
-  );
-  await db.run(
-    `INSERT INTO schema_meta (key, value) VALUES ('version', ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-    String(SCHEMA_VERSION),
-  );
-  return SCHEMA_VERSION;
 }
 
 async function currentVersion(db: Sql): Promise<number> {
-  await db.run(`CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
   const row = await db.first<{ value: string }>(
     `SELECT value FROM schema_meta WHERE key = 'version'`,
   );
