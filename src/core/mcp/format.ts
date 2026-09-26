@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { Config } from '../config.js';
 import type { SiteRow, VersionRow } from '../../store.js';
-import { siteUrls } from '../urls.js';
+import { hasOwnOrigin, siteUrls } from '../urls.js';
 import { formatBytes, formatDate } from '../../util/html.js';
 import { subresourcePaths } from '../paths.js';
 import { messageFor } from '../../util/errors.js';
@@ -40,24 +40,29 @@ export function ok(
 }
 
 /**
- * Warns when a site is locked and carries files a browser fetches as
- * subresources. Those requests cannot authenticate on a path-based URL — the
- * sandboxed page has an opaque origin and sends no cookies with them — so the
- * page renders unstyled and the browser blames ERR_BLOCKED_BY_ORB. Better to say
- * so at publish time than to let the owner discover it in devtools.
+ * Warns when a locked site carries files a browser fetches as subresources and
+ * the site has no URL where those can load.
+ *
+ * On a path-based URL the page is sandboxed, which gives it an opaque origin,
+ * and an opaque origin sends no cookies with subresource requests — the browser
+ * reports ERR_BLOCKED_BY_ORB. On the site's own hostname there is no sandbox, so
+ * same-origin CSS and JS carry the unlock cookie like any other request, and
+ * path-based requests for the site are redirected there. Only when no hostname
+ * exists (or sandboxing is forced) is a multi-file locked site broken.
  */
-export function gatedSubresourceWarnings(site: SiteRow, paths: string[]): string[] {
+export function gatedSubresourceWarnings(config: Config, site: SiteRow, paths: string[]): string[] {
   if (site.visibility !== 'password') return [];
+  if (hasOwnOrigin(config, site)) return [];
   const blocked = subresourcePaths(paths);
   if (blocked.length === 0) return [];
   const shown = blocked.slice(0, 8).join(', ');
   const more = blocked.length > 8 ? `, and ${blocked.length - 8} more` : '';
   return [
-    `"${site.slug}" is password protected, so these files will not load for visitors: ` +
-      `${shown}${more}. A locked page is sandboxed, which gives it an opaque origin, and ` +
-      `an opaque origin sends no cookies with subresource requests — the browser reports ` +
-      `ERR_BLOCKED_BY_ORB. Republish as a single file with the CSS and JS inlined, make ` +
-      `the site public, or serve it on its own hostname.`,
+    `"${site.slug}" is password protected and only reachable on a path-based URL, so these files ` +
+      `will not load for visitors: ${shown}${more}. A locked page there is sandboxed, which gives it ` +
+      `an opaque origin, and an opaque origin sends no cookies with subresource requests — the browser ` +
+      `reports ERR_BLOCKED_BY_ORB. Give the site its own hostname (set A2W_SITES_BASE_DOMAIN or a ` +
+      `custom domain), republish as a single file with the CSS and JS inlined, or make the site public.`,
   ];
 }
 
