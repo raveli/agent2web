@@ -137,3 +137,82 @@ test('if_version on a publish without a slug says so plainly', async () => {
   assert.equal(res.isError, true);
   assert.doesNotMatch(textOf(res), /undefined/);
 });
+
+test('a site deleted between the check and the commit gives a clear error, not a crash', async () => {
+  const { v2 } = await site('deleted-mid-write');
+  const db = (await h.mf.getD1Database('DB')) as never;
+  const bucket: any = await h.mf.getR2Bucket('BLOBS');
+  const config = { maxFiles: 200, maxFileBytes: 5 << 20, maxSiteBytes: 25 << 20, keepVersions: 10 } as Config;
+  const crypto = new WebCryptoProvider();
+  const other = new SiteStore(db, bucket, config, crypto);
+  let deleted = false;
+  const trapped = new Proxy(bucket, {
+    get(target, prop) {
+      if (prop !== 'put') return target[prop].bind(target);
+      return async (...args: unknown[]) => {
+        if (!deleted) {
+          deleted = true;
+          await other.deleteSite('deleted-mid-write');
+        }
+        return target.put(...args);
+      };
+    },
+  });
+  await assert.rejects(
+    new SiteStore(db, trapped, config, crypto).publish({
+      slug: 'deleted-mid-write',
+      files: [{ path: 'index.html', content: 'late' }],
+      ifVersion: v2,
+    }),
+    /was deleted while/,
+  );
+  assert.equal(await h.db.first('SELECT id FROM sites WHERE slug = ?', 'deleted-mid-write'), undefined);
+});
+
+test('an edit reads the file at if_version, so a write landing right after the check still reports the conflict', async () => {
+  // The other writer commits after if_version is checked but before the edit
+  // looks up which version to read. Reading the live file then fails with
+  // "old_text was not found"; reading the version the change was based on
+  // reaches the real conflict.
+  const first = await call('site_publish', { slug: 'edit-window', html: '<p>one</p>' });
+  const v1 = structured(first).version.version_id;
+  const realDb: any = await h.mf.getD1Database('DB');
+  const bucket: any = await h.mf.getR2Bucket('BLOBS');
+  const config = { maxFiles: 200, maxFileBytes: 5 << 20, maxSiteBytes: 25 << 20, keepVersions: 10 } as Config;
+  const crypto = new WebCryptoProvider();
+  const other = new SiteStore(realDb, bucket, config, crypto);
+
+  // The second site-by-slug lookup is the edit's own, after the check.
+  let lookups = 0;
+  let raced = false;
+  const trappedDb = new Proxy(realDb, {
+    get(target, prop) {
+      if (prop !== 'prepare') return target[prop].bind(target);
+      return (sql: string) => {
+        const statement = target.prepare(sql);
+        if (!sql.startsWith('SELECT * FROM sites WHERE slug') || ++lookups !== 2) return statement;
+        const race = async () => {
+          raced = true;
+          await other.publish({ slug: 'edit-window', files: [{ path: 'index.html', content: '<p>theirs</p>' }] });
+        };
+        return {
+          bind: (...params: unknown[]) => {
+            const bound = statement.bind(...params);
+            return { first: async () => (await race(), bound.first()) };
+          },
+        };
+      };
+    },
+  });
+  await assert.rejects(
+    new SiteStore(trappedDb, bucket, config, crypto).editFile(
+      'edit-window',
+      'index.html',
+      [{ old_text: '<p>one</p>', new_text: '<p>mine</p>' }],
+      undefined,
+      v1,
+    ),
+    /has moved on/,
+  );
+  assert.ok(raced, 'the race was not exercised');
+});
