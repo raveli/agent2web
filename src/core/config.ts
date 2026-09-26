@@ -160,6 +160,13 @@ export async function loadConfig(
       `A2W_PUBLIC_URL uses ${publicOrigin.protocol} on a non-local host. OAuth clients such as Claude require https.`,
     );
   }
+  if (v.A2W_SITE_SANDBOX === 'never') {
+    warnings.push(
+      'A2W_SITE_SANDBOX=never now behaves like auto: path URLs share the admin origin and stay ' +
+        'sandboxed regardless, or a published page could act as the owner. A site on its own hostname ' +
+        'is unsandboxed under auto already, so give sites that need localStorage a hostname.',
+    );
+  }
   if (v.A2W_SITES_BASE_DOMAIN && v.A2W_SITES_BASE_DOMAIN === publicOrigin.hostname) {
     warnings.push(
       'A2W_SITES_BASE_DOMAIN equals the app hostname. Use a dedicated domain (e.g. sites.example.com) so published pages are isolated from the admin origin.',
