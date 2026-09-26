@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "test/check.test.ts"
+        ],
+        "createdAt": "2026-09-26T15:21:10.182Z",
+        "reason": "Claude, from the file's content: test fixtures for site_check's reference scanner; the <img> strings are deliberate inputs, not rendered UI"
+      }
+    ]
+  }
+}
