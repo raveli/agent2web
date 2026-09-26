@@ -1,4 +1,4 @@
-import type { R2Bucket } from '@cloudflare/workers-types';
+import type { FixedLengthStream as FixedLengthStreamClass, R2Bucket } from '@cloudflare/workers-types';
 import type { Config } from './core/config.js';
 import type { WebCryptoProvider } from './core/crypto.js';
 import { Sql, stmt, type Statement } from './d1.js';
@@ -55,12 +55,23 @@ export type FileEdit = { old_text: string; new_text: string; replace_all?: boole
 
 type PreparedFile = { path: string; data: Uint8Array; contentType: string; sha256: string };
 
+/** What a version records about each of its files. */
+type StoredFile = { path: string; bytes: number; contentType: string; sha256: string };
+
+/** A file an update leaves alone, copied object to object from the version before. */
+type CarriedFile = StoredFile & { fromKey: string };
+
+// A Workers global; the types are imported per module rather than ambiently.
+declare const FixedLengthStream: typeof FixedLengthStreamClass;
+
 export type PublishOptions = {
   slug?: string;
   title?: string;
   files: InputFile[];
   /** Paths assembled earlier with stageFile, added to `files` and cleared on success. */
   staged?: string[];
+  /** Files of the current version to copy into the new one unchanged (updateFiles). */
+  carry?: CarriedFile[];
   note?: string;
   visibility?: Visibility;
   password?: string | null;
@@ -226,8 +237,15 @@ export class SiteStore {
       await this.clearStaged(slug, options.staged);
       return result;
     }
-    const prepared = await this.prepareFiles(options.files);
-    if (!prepared.some(f => f.path === 'index.html')) {
+    const carry = options.carry ?? [];
+    const prepared =
+      options.files.length === 0 && carry.length > 0 ? [] : await this.prepareFiles(options.files);
+    const stored: StoredFile[] = [
+      ...prepared.map(f => ({ path: f.path, bytes: f.data.byteLength, contentType: f.contentType, sha256: f.sha256 })),
+      ...carry,
+    ];
+    if (carry.length) this.checkTotals(stored);
+    if (!stored.some(f => f.path === 'index.html')) {
       throw new UserError(
         'A site must contain "index.html" so the root URL resolves. Add it, or rename your entry file.',
       );
@@ -284,7 +302,8 @@ export class SiteStore {
           httpMetadata: { contentType: file.contentType },
         });
       }
-      await this.commitVersion(site, versionId, prepared, options, now);
+      for (const file of carry) await this.copyObject(file, blobKey(site.id, versionId, file.path));
+      await this.commitVersion(site, versionId, stored, options, now);
     } catch (err) {
       await this.blobs.delete(
         (await this.listKeys(versionPrefix(site.id, versionId))) as never,
@@ -340,21 +359,21 @@ export class SiteStore {
       }
     }
 
-    const files: InputFile[] = [];
-    for (const row of currentFiles) {
-      if (removeSet.has(row.path) || upsertMap.has(row.path)) continue;
-      const object = await this.blobs.get(blobKey(site.id, site.current_version_id, row.path));
-      if (!object) continue;
-      const bytes = new Uint8Array(await object.arrayBuffer());
-      files.push({ path: row.path, content: encodeBase64(bytes), encoding: 'base64' });
-    }
-    for (const file of upsertMap.values()) {
-      files.push({ path: file.path, content: encodeBase64(file.data), encoding: 'base64' });
-    }
-    if (files.length === 0) {
+    // Carried files are copied object to object rather than read into the
+    // isolate: a 5 MB site used to cost ~177 MB of heap in base64 round trips.
+    const carry: CarriedFile[] = currentFiles
+      .filter(row => !removeSet.has(row.path) && !upsertMap.has(row.path))
+      .map(row => ({
+        path: row.path,
+        bytes: row.bytes,
+        contentType: row.content_type,
+        sha256: row.sha256,
+        fromKey: blobKey(site.id, site.current_version_id!, row.path),
+      }));
+    if (carry.length === 0 && upserted.length === 0) {
       throw new UserError('That would delete every file. Use site_delete to remove the site.');
     }
-    return this.publish({ slug: site.slug, files, note, ifExists: 'new_version' });
+    return this.publish({ slug: site.slug, files: upsert, carry, note, ifExists: 'new_version' });
   }
 
   /**
@@ -455,14 +474,52 @@ export class SiteStore {
     await this.blobs.delete(paths.map(p => stagingKey(slug, p)) as never).catch(() => {});
   }
 
+  /**
+   * Copies one carried file into the new version by streaming it between
+   * objects. A missing source used to be skipped, so the update reported
+   * success with the file gone; now it stops the publish.
+   */
+  private async copyObject(file: CarriedFile, toKey: string): Promise<void> {
+    const source = await this.blobs.get(file.fromKey);
+    if (!source) {
+      throw new UserError(
+        `${file.path} is part of the current version but its stored copy is missing, so carrying it ` +
+          'over would silently drop it. Nothing was published. Re-upload it in this update, or restore ' +
+          'an earlier version with site_rollback.',
+        409,
+      );
+    }
+    // R2 needs a length-known stream; FixedLengthStream supplies one without buffering.
+    const { readable, writable } = new FixedLengthStream(source.size);
+    await Promise.all([
+      source.body.pipeTo(writable as never),
+      this.blobs.put(toKey, readable as never, { httpMetadata: { contentType: file.contentType } }),
+    ]);
+  }
+
+  /** The file-count and total-size limits, over new and carried files together. */
+  private checkTotals(files: StoredFile[]): void {
+    if (files.length > this.config.maxFiles) {
+      throw new UserError(
+        `Too many files: ${files.length} (limit ${this.config.maxFiles}). Split the site or raise A2W_MAX_FILES.`,
+      );
+    }
+    const total = files.reduce((n, f) => n + f.bytes, 0);
+    if (total > this.config.maxSiteBytes) {
+      throw new UserError(
+        `Site exceeds the ${this.config.maxSiteBytes} byte total limit. Remove files or raise A2W_MAX_SITE_BYTES.`,
+      );
+    }
+  }
+
   private async commitVersion(
     site: SiteRow,
     versionId: string,
-    files: PreparedFile[],
+    files: StoredFile[],
     options: PublishOptions,
     now: number,
   ): Promise<void> {
-    const bytes = files.reduce((n, f) => n + f.data.byteLength, 0);
+    const bytes = files.reduce((n, f) => n + f.bytes, 0);
     const statements: Statement[] = [
       stmt(
         `INSERT INTO versions (id, site_id, note, bytes, file_count, created_at)
@@ -481,7 +538,7 @@ export class SiteStore {
           `INSERT INTO files (version_id, path, bytes, content_type, sha256) VALUES (?, ?, ?, ?, ?)`,
           versionId,
           file.path,
-          file.data.byteLength,
+          file.bytes,
           file.contentType,
           file.sha256,
         ),
