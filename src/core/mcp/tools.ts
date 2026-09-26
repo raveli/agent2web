@@ -394,6 +394,61 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
   );
 
   server.registerTool(
+    'site_check',
+    {
+      title: 'Check a site is complete',
+      description:
+        'Reports whether a published site is complete: every file with its size, content type and sha256, and ' +
+        'any file its HTML (href, src) or CSS (url()) refers to that the site does not have. Use it after a ' +
+        'publish, split or removal, and compare the sha256 values with your local files instead of reading ' +
+        'the site back. Works from the stored files, so it needs no password for a locked site. It cannot see ' +
+        'URLs that JavaScript builds at runtime, such as fetch(url).',
+      inputSchema: {
+        slug: slugArg,
+        version_id: z.string().optional().describe('Check a specific version instead of the live one.'),
+        response_format: responseFormat,
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async args => {
+      try {
+        const result = await store.checkSite(args.slug, args.version_id);
+        const paths = result.files.map(f => f.path);
+        const hasIndex = paths.includes('index.html');
+        const warnings = gatedSubresourceWarnings(config, result.site, paths);
+        const isOk = hasIndex && result.missing.length === 0 && warnings.length === 0;
+        const structured = {
+          slug: result.site.slug,
+          version_id: result.versionId,
+          ok: isOk,
+          has_index: hasIndex,
+          missing: result.missing,
+          files: result.files.map(f => ({
+            path: f.path,
+            bytes: f.bytes,
+            content_type: f.content_type,
+            sha256: f.sha256,
+          })),
+        };
+        const lines = [
+          `**${result.site.slug}** \`${result.versionId}\`: ${isOk ? 'complete' : 'NOT complete'}, ${plural(
+            result.files.length,
+            'file',
+          )}.`,
+          hasIndex ? '' : 'There is no index.html, so the root URL returns 404.',
+          result.missing.length
+            ? `Missing references:\n${result.missing.map(m => `- ${m.file} → ${m.resolved}`).join('\n')}`
+            : 'No missing references.',
+          `Files:\n${result.files.map(f => `- ${f.path} (${formatBytes(f.bytes)}) sha256 ${f.sha256}`).join('\n')}`,
+        ].filter(Boolean);
+        return ok(args.response_format as ResponseFormat, lines.join('\n\n'), structured, warnings);
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
     'site_list',
     {
       title: 'List published sites',
