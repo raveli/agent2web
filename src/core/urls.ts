@@ -27,3 +27,13 @@ export function siteUrls(config: Config, site: Pick<SiteRow, 'slug' | 'custom_do
 export function siteCookiePath(config: Config, slug: string, hostBased: boolean): string {
   return hostBased ? '/' : `${config.sitesPathPrefix}/${slug}`;
 }
+
+/**
+ * Whether a site is served somewhere it gets a real origin: its own hostname,
+ * without a forced sandbox. There, a locked multi-file site works.
+ */
+export function hasOwnOrigin(config: Config, site: Pick<SiteRow, 'slug' | 'custom_domain'>): boolean {
+  if (config.siteSandbox === 'always') return false;
+  const urls = siteUrls(config, site);
+  return Boolean(urls.custom ?? urls.subdomain);
+}

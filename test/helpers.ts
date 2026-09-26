@@ -195,7 +195,7 @@ export type RawResponse = {
 export async function rawRequest(
   port: number,
   path: string,
-  options: { method?: string; host?: string; headers?: Record<string, string> } = {},
+  options: { method?: string; host?: string; headers?: Record<string, string>; body?: string } = {},
 ): Promise<RawResponse> {
   const { request } = await import('node:http');
   return new Promise((resolve, reject) => {
@@ -215,6 +215,6 @@ export async function rawRequest(
       },
     );
     req.on('error', reject);
-    req.end();
+    req.end(options.body);
   });
 }

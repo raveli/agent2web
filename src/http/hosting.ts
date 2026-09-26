@@ -4,7 +4,7 @@ import type { SiteRow } from '../store.js';
 import type { Resolution } from '../core/resolve.js';
 import { issueSiteCookie, siteCookieName, siteCookieValid } from '../core/session.js';
 import { sitePasswordPage, notFoundPage } from '../core/views/pages.js';
-import { siteCookiePath } from '../core/urls.js';
+import { hasOwnOrigin, siteCookiePath, siteUrls } from '../core/urls.js';
 import { isDocumentDestination } from '../core/paths.js';
 import { fromBase64 } from '../util/bytes.js';
 
@@ -18,6 +18,20 @@ export async function serveSite(c: Context<Env>, target: SiteTarget): Promise<Re
   const { site } = target;
 
   if (site.visibility === 'disabled') return notFound(c, target);
+
+  // A locked page on a path URL is sandboxed and cannot load its own CSS or JS
+  // (see denyAccess). When the site has a hostname of its own, send visitors
+  // there instead, so every link to a locked site lands where it works.
+  if (
+    site.visibility === 'password' &&
+    !target.hostBased &&
+    (c.req.method === 'GET' || c.req.method === 'HEAD') &&
+    hasOwnOrigin(config, site)
+  ) {
+    const home = siteUrls(config, site).primary.replace(/\/$/, '');
+    const rest = target.innerPath.startsWith('/') ? target.innerPath : `/${target.innerPath}`;
+    return c.redirect(`${home}${rest}${new URL(c.req.url).search}`, 302);
+  }
 
   const inner = target.innerPath.split('?')[0] ?? '/';
   if (inner === '/__a2w/login' || inner === '/__a2w/logout') {

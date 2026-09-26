@@ -65,6 +65,14 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
   const limits = `Limits: ${config.maxFiles} files, ${formatBytes(config.maxFileBytes)} per file, ${formatBytes(
     config.maxSiteBytes,
   )} per site.`;
+  // Whether a locked site can load its own CSS and JS depends on the deployment,
+  // so agents are told which world they are in before they choose a layout.
+  const layout =
+    config.sitesBaseDomain && config.siteSandbox !== 'always'
+      ? 'Prefer several small files (separate CSS, JS and pages) over one large page: they stay cheap to ' +
+        'edit, and they work on password-protected sites too, because each site is served on its own hostname.'
+      : 'On this deployment a password-protected page cannot load separate CSS, JS or images, so inline ' +
+        'them into the HTML for locked sites.';
 
   server.registerTool(
     'site_publish',
@@ -76,7 +84,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
         'New sites are password protected by default: pass `password` to choose one, or omit it and a ' +
         'readable password is generated and returned once. To publish something anyone with the link can ' +
         'read, set visibility:"public" AND confirm_public:true — ask the person you are working for first, ' +
-        `because a link that has been shared cannot be unshared. ${LARGE_FILES} ${limits}`,
+        `because a link that has been shared cannot be unshared. ${layout} ${LARGE_FILES} ${limits}`,
       inputSchema: {
         slug: z
           .string()
@@ -164,7 +172,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
             'file',
           )}, ${formatBytes(result.version.bytes)})\n\n${urls.primary}\n${extra}`.trim(),
           structured,
-          gatedSubresourceWarnings(result.site, paths),
+          gatedSubresourceWarnings(config, result.site, paths),
         );
       } catch (err) {
         return fail(err);
@@ -212,6 +220,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
           )} (${formatBytes(result.version.bytes)}).\n\n${siteUrls(config, result.site).primary}`,
           { ...siteSummary(config, result.site), version: versionSummary(result.version) },
           gatedSubresourceWarnings(
+            config,
             result.site,
             (await store.listFiles(result.version.id)).map(f => f.path),
           ),
@@ -471,7 +480,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
             ...siteSummary(config, site),
             ...(generatedPassword ? { generated_password: generatedPassword } : {}),
           },
-          gatedSubresourceWarnings(site, locked),
+          gatedSubresourceWarnings(config, site, locked),
         );
       } catch (err) {
         return fail(err);
