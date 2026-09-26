@@ -7,6 +7,7 @@ import { purgeAttempts } from './core/throttle.js';
 import { Sql } from './d1.js';
 import { createApp, type Bindings } from './http/app.js';
 import { readPublicUrl } from './public-url.js';
+import { onceUntilSuccess } from './util/once.js';
 
 /**
  * The Worker entry point.
@@ -17,7 +18,7 @@ import { readPublicUrl } from './public-url.js';
  * into a stack trace, since there is no console to read on a deployed Worker.
  */
 let cached: { app: ReturnType<typeof createApp>; config: Config } | undefined;
-let migrated: Promise<unknown> | undefined;
+let migrated: (() => Promise<unknown>) | undefined;
 let configError: string | undefined;
 let warnedUnsettled = false;
 
@@ -29,9 +30,15 @@ export default {
 
     const sql = new Sql(env.DB);
     // Migrations run once per isolate, and are idempotent besides. They come
-    // first because the public URL may need to be read from the database.
-    migrated ??= migrate(sql);
-    await migrated;
+    // first because the public URL may need to be read from the database. A
+    // failure is retried by the next request instead of being cached.
+    migrated ??= onceUntilSuccess(() => migrate(new Sql(env.DB)));
+    try {
+      await migrated();
+    } catch (err) {
+      console.error('[boot] database migration failed; the next request retries it', err);
+      return plain('The database is not ready. Try again in a moment.', 503);
+    }
 
     let publicUrl: string;
     try {

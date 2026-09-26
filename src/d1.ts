@@ -24,6 +24,12 @@ export class Sql {
     await this.bind(sql, params).run();
   }
 
+  /** Runs a write and reports how many rows it changed. */
+  async changes(sql: string, ...params: unknown[]): Promise<number> {
+    const result = await this.bind(sql, params).run();
+    return Number(result.meta?.changes ?? 0);
+  }
+
   /**
    * Applies every statement or none of them.
    *
