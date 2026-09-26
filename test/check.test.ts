@@ -87,3 +87,78 @@ test('only HTML and CSS are scanned; a JavaScript file mentioning a path is not 
   ];
   assert.deepEqual(findMissingReferences(files), []);
 });
+
+// Review findings: text that is not markup must not be read as references.
+test('markup inside code samples, comments, scripts and attribute text is not a reference', () => {
+  const files = [
+    html(
+      'index.html',
+      '<pre><code>&lt;link href="theme.css"&gt;</code></pre>' +
+        '<p>&lt;a href=&quot;x.html&quot;&gt;</p>' +
+        '<!-- <script src="old.js"></script> -->' +
+        `<script>const a = '<a href="' + url + '">'; document.write('<img src="later.png">')</script>` +
+        '<p title="see href=y.html">t</p>' +
+        '<template><img src="tpl.png"></template><textarea><img src="ta.png"></textarea>',
+    ),
+  ];
+  assert.deepEqual(findMissingReferences(files), []);
+});
+
+test('a script tag\'s own src is still checked', () => {
+  assert.deepEqual(findMissingReferences([html('index.html', '<script src="app.js">const x = 1</script>')]), [
+    { file: 'index.html', reference: 'app.js', resolved: 'app.js' },
+  ]);
+});
+
+test('inline CSS in style blocks and style attributes is checked, and @import too', () => {
+  const files = [
+    html(
+      'index.html',
+      '<style>@import "base.css"; @import url(theme.css); body{background:url(bg.png)}</style>' +
+        '<div style="background-image:url(\'hero.jpg\')"></div>',
+    ),
+    css('s.css', '@import "more.css";'),
+  ];
+  assert.deepEqual(findMissingReferences(files), [
+    { file: 'index.html', reference: 'base.css', resolved: 'base.css' },
+    { file: 'index.html', reference: 'theme.css', resolved: 'theme.css' },
+    { file: 'index.html', reference: 'bg.png', resolved: 'bg.png' },
+    { file: 'index.html', reference: 'hero.jpg', resolved: 'hero.jpg' },
+    { file: 's.css', reference: 'more.css', resolved: 'more.css' },
+  ]);
+});
+
+test('CSS comments are not references', () => {
+  assert.deepEqual(findMissingReferences([css('s.css', '/* url(old.png) @import "gone.css"; */ a{}')]), []);
+});
+
+test('srcset and poster are checked; a base element is not itself a missing file', () => {
+  const files = [
+    html(
+      'index.html',
+      '<base href="/sub/"><img srcset="a.png 1x, img/b.png 2x" src="a.png"><video poster="p.jpg"></video>',
+    ),
+    other('a.png'),
+  ];
+  assert.deepEqual(findMissingReferences(files), [
+    { file: 'index.html', reference: 'img/b.png', resolved: 'img/b.png' },
+    { file: 'index.html', reference: 'p.jpg', resolved: 'p.jpg' },
+  ]);
+});
+
+test('entities in attribute values are decoded, and resolved paths are shown decoded', () => {
+  const files = [
+    html('index.html', '<a href="page.html?a=1&amp;b=2">x</a><img src="my%20pic.png"><img src="äiti.jpg">'),
+    other('page.html'),
+  ];
+  assert.deepEqual(findMissingReferences(files), [
+    { file: 'index.html', reference: 'my%20pic.png', resolved: 'my pic.png' },
+    { file: 'index.html', reference: 'äiti.jpg', resolved: 'äiti.jpg' },
+  ]);
+});
+
+test('uppercase tags and attributes are read like lowercase ones', () => {
+  assert.deepEqual(findMissingReferences([html('index.html', '<IMG SRC="Up.PNG">')]), [
+    { file: 'index.html', reference: 'Up.PNG', resolved: 'Up.PNG' },
+  ]);
+});

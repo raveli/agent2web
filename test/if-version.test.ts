@@ -115,3 +115,25 @@ test('without if_version, writes behave exactly as before', async () => {
   const res = await call('site_update_files', { slug: 'unconditional', upsert: [{ path: 'c.txt', content: 'c' }] });
   assert.notEqual(res.isError, true, textOf(res));
 });
+
+test('a stale edit is refused as a conflict even when the other writer changed the edited text', async () => {
+  // Review finding: the edit used to be applied to the live file first, so the
+  // agent got "old_text was not found" and never learned someone else edited.
+  const first = await call('site_publish', { slug: 'edit-race', html: '<style>a{}</style><p>one</p>' });
+  const v1 = structured(first).version.version_id;
+  await call('site_edit_file', { slug: 'edit-race', edits: [{ old_text: '<p>one</p>', new_text: '<p>theirs</p>' }] });
+  for (const [tool, args] of [
+    ['site_edit_file', { edits: [{ old_text: '<p>one</p>', new_text: '<p>mine</p>' }] }],
+    ['site_extract_file', { extractions: [{ to: 'x.css', start: '<p>one', end: '</p>', replace_with: '' }] }],
+  ] as const) {
+    const res = await call(tool, { slug: 'edit-race', ...args, if_version: v1 });
+    assert.equal(res.isError, true);
+    assert.match(textOf(res), /has moved on/, `${tool}: ${textOf(res)}`);
+  }
+});
+
+test('if_version on a publish without a slug says so plainly', async () => {
+  const res = await call('site_publish', { html: '<p>x</p>', if_version: 'abc' });
+  assert.equal(res.isError, true);
+  assert.doesNotMatch(textOf(res), /undefined/);
+});

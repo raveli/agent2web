@@ -275,7 +275,14 @@ export class SiteStore {
     let created = false;
 
     if (options.ifVersion !== undefined) {
-      if (!site) throw new UserError(`if_version was given, but there is no site "${options.slug}" yet.`, 404);
+      if (!site) {
+        throw new UserError(
+          options.slug
+            ? `if_version was given, but there is no site "${options.slug}" yet.`
+            : 'if_version only applies to an existing site: pass its slug.',
+          404,
+        );
+      }
       if (site.current_version_id !== options.ifVersion) throw await this.versionConflict(site, options.ifVersion);
     }
 
@@ -414,6 +421,9 @@ export class SiteStore {
     ifVersion?: string,
   ): Promise<PublishResult> {
     if (edits.length === 0) throw new UserError('Pass at least one edit.');
+    // Before applying the edits: against a newer file they may fail for the
+    // wrong reason, and the agent must learn that someone else edited.
+    await this.assertLive(slug, ifVersion);
     const file = await this.readSiteFile(slug, filePath, undefined, Infinity);
     if (!isTextType(file.contentType)) {
       throw new UserError(`${file.path} is ${file.contentType}, not text; replace it with site_update_files.`);
@@ -459,6 +469,7 @@ export class SiteStore {
     options: { note?: string; overwrite?: boolean; ifVersion?: string } = {},
   ): Promise<PublishResult & { extracted: { path: string; bytes: number }[] }> {
     if (extractions.length === 0) throw new UserError('Pass at least one extraction.');
+    await this.assertLive(slug, options.ifVersion);
     const site = await this.requireSite(slug);
     const file = await this.readSiteFile(slug, fromPath, undefined, Infinity);
     if (!isTextType(file.contentType)) {
@@ -524,16 +535,18 @@ export class SiteStore {
     }
     const files = await this.listFiles(version);
     const inputs: CheckFile[] = [];
+    const unreadable: string[] = [];
     for (const row of files) {
       const scanned = row.content_type.startsWith('text/html') || row.content_type.startsWith('text/css');
       let text: string | undefined;
       if (scanned) {
         const object = await this.blobs.get(blobKey(site.id, version, row.path));
-        text = object ? decodeUtf8(new Uint8Array(await object.arrayBuffer())) : undefined;
+        if (object) text = decodeUtf8(new Uint8Array(await object.arrayBuffer()));
+        else unreadable.push(row.path);
       }
       inputs.push({ path: row.path, contentType: row.content_type, text });
     }
-    return { site, versionId: version, files, missing: findMissingReferences(inputs) };
+    return { site, versionId: version, files, missing: findMissingReferences(inputs), unreadable };
   }
 
   // ---------------------------------------------------------------- staging
@@ -697,26 +710,40 @@ export class SiteStore {
     // happened. D1 runs a batch as one transaction, so a concurrent write that
     // got in first makes this whole batch a no-op rather than a second winner.
     const moved = `EXISTS (SELECT 1 FROM sites WHERE id = ? AND current_version_id = ?)`;
-    const guarded = statements.map(s => ({
-      sql: s.sql.replace(/VALUES \(([^)]*)\)\s*$/, `SELECT $1 WHERE ${moved}`),
-      params: [...(s.params ?? []), site.id, versionId],
-    }));
+    const guarded = statements.map(s => {
+      const sql = s.sql.replace(/VALUES \(([^)]*)\)\s*$/, `SELECT $1 WHERE ${moved}`);
+      // Every insert in this batch must be guarded; one that is not would land
+      // even when the swap fails.
+      if (sql === s.sql) throw new Error(`commitVersion cannot guard this statement: ${s.sql}`);
+      return { sql, params: [...(s.params ?? []), site.id, versionId] };
+    });
     const changes = await this.sql.batch([
       stmt(`UPDATE sites SET ${sets.join(', ')} WHERE id = ? AND current_version_id = ?`, ...params, options.ifVersion),
       ...guarded,
     ]);
     if (changes[0] !== 1) {
-      throw await this.versionConflict((await this.getSiteById(site.id))!, options.ifVersion);
+      const now = await this.getSiteById(site.id);
+      if (!now) throw new UserError(`"${site.slug}" was deleted while this change was being published.`, 409);
+      throw await this.versionConflict(now, options.ifVersion);
     }
+  }
+
+  /** Throws the if_version conflict early, before any work is done. */
+  private async assertLive(slug: string, ifVersion: string | undefined): Promise<void> {
+    if (ifVersion === undefined) return;
+    const site = await this.requireSite(slug);
+    if (site.current_version_id !== ifVersion) throw await this.versionConflict(site, ifVersion);
   }
 
   /** The 409 for a write based on a version that is no longer live. */
   private async versionConflict(site: SiteRow, expected: string): Promise<UserError> {
     const live = site.current_version_id ? await this.getVersion(site.id, site.current_version_id) : undefined;
+    // "Originally": a rollback makes an older version live again without
+    // recording who did it, so its author may not be who moved the site.
     const who = live?.actor ? ` by ${live.actor_label ? `${live.actor_label} (${live.actor})` : live.actor}` : '';
     const when = live ? ` at ${new Date(live.created_at).toISOString()}` : '';
     return new UserError(
-      `"${site.slug}" has moved on: the live version is ${site.current_version_id ?? 'none'}, created${who}${when}, ` +
+      `"${site.slug}" has moved on: the live version is ${site.current_version_id ?? 'none'}, originally created${who}${when}, ` +
         `not ${expected}. Nothing was published. Re-read the site, re-apply your change on top of the live ` +
         `version, and retry with if_version:"${site.current_version_id}".`,
       409,

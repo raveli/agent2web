@@ -83,3 +83,13 @@ test('a locked site with separate files and no hostname of its own is not ok, an
   assert.equal(data.ok, false);
   assert.match(data.warnings.join(' '), /will not load/);
 });
+
+test('an HTML file recorded in the version but missing from storage is reported', async () => {
+  await publish('lost-object');
+  const siteId = (await h.db.first<{ id: string }>('SELECT id FROM sites WHERE slug = ?', 'lost-object'))!.id;
+  const live = (await h.db.first<{ current_version_id: string }>('SELECT current_version_id FROM sites WHERE id = ?', siteId))!;
+  await (await h.mf.getR2Bucket('BLOBS')).delete(`sites/${siteId}/${live.current_version_id}/styles.css`);
+  const data = structured(await call('site_check', { slug: 'lost-object' }));
+  assert.equal(data.ok, false);
+  assert.deepEqual(data.unreadable, ['styles.css']);
+});
