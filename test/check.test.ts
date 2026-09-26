@@ -162,3 +162,66 @@ test('uppercase tags and attributes are read like lowercase ones', () => {
     { file: 'index.html', reference: 'Up.PNG', resolved: 'Up.PNG' },
   ]);
 });
+
+// Second review: tags are read with quotes taken into account, in one pass.
+test('a ">" inside a quoted attribute value does not end the tag', () => {
+  const files = [
+    html(
+      'index.html',
+      '<img v-if="items.length > 0" src="m1.png"><img alt="a > b" src="m2.png"><a title=">" href="m3.html">x</a>' +
+        '<button @click="n > 1 && go()" style="background:url(m4.png)">b</button>',
+    ),
+  ];
+  assert.deepEqual(
+    findMissingReferences(files).map(m => m.resolved),
+    ['m1.png', 'm2.png', 'm3.html', 'm4.png'],
+  );
+});
+
+test('markup inside an attribute value is not a reference', () => {
+  const files = [html('index.html', '<iframe srcdoc="<img src=&quot;sd.png&quot;>"></iframe><div data-x="<img src=fp.png>"></div>')];
+  assert.deepEqual(findMissingReferences(files), []);
+});
+
+test('comment and raw-text markers inside script strings do not hide what follows', () => {
+  const files = [
+    html('index.html', '<script>var s="<!--";</script><img src="real1.png"><script>var t="-->";</script>'),
+    html('b.html', '<script>var s="<textarea>";</script><img src="real2.png">'),
+    css('s.css', '.a{content:"/*"} .b{background:url(real3.png)} .c{content:"*/"}'),
+  ];
+  assert.deepEqual(findMissingReferences(files).map(m => m.resolved), ['real1.png', 'real2.png', 'real3.png']);
+});
+
+test('srcset follows the HTML rules: data URIs and commas inside a URL stay whole', () => {
+  const files = [
+    html('index.html', '<img srcset="data:image/png;base64,AAAA 1x, img/a,b.png 2x, c.png">'),
+    other('img/a,b.png'),
+  ];
+  assert.deepEqual(findMissingReferences(files).map(m => m.resolved), ['c.png']);
+});
+
+test('unclosed style and script behave as a browser reads them', () => {
+  assert.deepEqual(findMissingReferences([html('a.html', '<style>body{background:url(s.png)}')]).map(m => m.resolved), ['s.png']);
+  assert.deepEqual(findMissingReferences([html('b.html', '<script>document.write("<img src=x.png>")')]), []);
+  // <style/> opens a style element; what follows is CSS text, not a tag.
+  assert.deepEqual(findMissingReferences([html('c.html', '<style/><img src="after.png">')]), []);
+});
+
+test('unterminated and adversarial input is scanned in linear time', () => {
+  const cases = [
+    'a<b '.repeat(250_000),
+    '<a '.repeat(350_000),
+    '<script'.repeat(150_000),
+    '<!--'.repeat(250_000),
+    '<img src="x.png" alt="'.repeat(40_000),
+  ];
+  for (const text of cases) {
+    const started = performance.now();
+    findMissingReferences([html('index.html', text)]);
+    const ms = performance.now() - started;
+    assert.ok(ms < 1000, `${text.slice(0, 12)}… (${text.length} chars) took ${Math.round(ms)} ms`);
+  }
+  const started = performance.now();
+  findMissingReferences([css('s.css', 'url('.repeat(250_000))]);
+  assert.ok(performance.now() - started < 1000, 'CSS url( without a closing paren');
+});

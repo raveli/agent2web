@@ -424,7 +424,9 @@ export class SiteStore {
     // Before applying the edits: against a newer file they may fail for the
     // wrong reason, and the agent must learn that someone else edited.
     await this.assertLive(slug, ifVersion);
-    const file = await this.readSiteFile(slug, filePath, undefined, Infinity);
+    // Read the version the change is based on, not whatever is live by now:
+    // if someone committed in between, publish reports that as the conflict.
+    const file = await this.readSiteFile(slug, filePath, ifVersion, Infinity);
     if (!isTextType(file.contentType)) {
       throw new UserError(`${file.path} is ${file.contentType}, not text; replace it with site_update_files.`);
     }
@@ -471,11 +473,11 @@ export class SiteStore {
     if (extractions.length === 0) throw new UserError('Pass at least one extraction.');
     await this.assertLive(slug, options.ifVersion);
     const site = await this.requireSite(slug);
-    const file = await this.readSiteFile(slug, fromPath, undefined, Infinity);
+    const file = await this.readSiteFile(slug, fromPath, options.ifVersion, Infinity);
     if (!isTextType(file.contentType)) {
       throw new UserError(`${file.path} is ${file.contentType}, not text, so it cannot be split.`);
     }
-    const existing = new Set((await this.listFiles(site.current_version_id!)).map(f => f.path));
+    const existing = new Set((await this.listFiles(options.ifVersion ?? site.current_version_id!)).map(f => f.path));
     const targets = new Set<string>();
     let text = decodeUtf8(file.data);
     const out: InputFile[] = [];
