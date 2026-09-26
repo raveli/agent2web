@@ -274,8 +274,10 @@ function siteHeaders(
     headers.set('Cache-Control', 'public, max-age=300');
   }
 
-  const sandbox =
-    config.siteSandbox === 'always' || (config.siteSandbox === 'auto' && !target.hostBased);
+  // A path URL shares the app's origin, so it is always sandboxed: without it a
+  // published page could fetch /admin, read the CSRF token and act as the
+  // owner. A2W_SITE_SANDBOX=never therefore only relaxes host-based serving.
+  const sandbox = config.siteSandbox === 'always' || !target.hostBased;
   if (sandbox) {
     // Published pages served from the app's own origin get an opaque origin, so
     // they cannot reach the admin session, the MCP endpoint or each other.

@@ -111,6 +111,11 @@ test('http public URLs and shared site domains raise warnings', async () => {
   assert.match(shared.warnings.join(' '), /dedicated domain/);
 });
 
+test('A2W_SITE_SANDBOX=never warns that path URLs stay sandboxed', async () => {
+  const config = await load({ ...(await baseEnv()), A2W_SITE_SANDBOX: 'never' });
+  assert.match(config.warnings.join(' '), /stay sandboxed/);
+});
+
 test('numeric settings are parsed and range-checked', async () => {
   const b = await baseEnv();
   const config = await load({

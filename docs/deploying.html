@@ -480,8 +480,8 @@ site_set_domain(slug: "quarterly", domain: "reports.customer.example")</div>
       <tr>
         <td>A published page cannot use <code>localStorage</code></td>
         <td>Expected on <code>/s/&lt;slug&gt;/</code> URLs: they are sandboxed because they share
-        the Worker's origin. Give sites their own subdomain, or set
-        <code>A2W_SITE_SANDBOX=never</code> and accept sharing the origin with the admin UI.</td>
+        the Worker's origin, and that cannot be turned off. Give sites their own subdomain
+        (<code>A2W_SITES_BASE_DOMAIN</code>) or a custom domain, where they are not sandboxed.</td>
       </tr>
       <tr>
         <td>Want to see what the Worker is doing</td>

@@ -171,9 +171,10 @@ path works.
   nothing.
 - **Published pages are untrusted HTML.** Served from the Worker's own origin (the
   `/s/…` URLs) they get `Content-Security-Policy: sandbox`, giving them an opaque
-  origin so they cannot touch the admin session or the MCP endpoint. Set
-  `A2W_SITE_SANDBOX=never` if your pages need `localStorage` or same-origin
-  `fetch` — and prefer giving sites their own domain in that case.
+  origin so they cannot touch the admin session or the MCP endpoint. That holds
+  whatever `A2W_SITE_SANDBOX` says. If your pages need `localStorage` or
+  same-origin `fetch`, serve them on their own hostname (`A2W_SITES_BASE_DOMAIN`
+  or a custom domain), where they are not sandboxed.
 - **Site hostnames are isolated**: a request arriving on a site's subdomain or
   custom domain cannot reach `/admin`, `/mcp` or the OAuth endpoints at all.
 - **Dot segments are resolved by the URL parser** before the app sees a path, and
@@ -199,7 +200,7 @@ Set as **vars** in `wrangler.jsonc`:
 | `A2W_PUBLIC_URL` | learned on first request | The Worker's public origin. OAuth issuer and token audience. Leave unset on a fresh deploy; set it exactly (no path, no trailing slash) when you attach a custom domain. |
 | `A2W_SITES_BASE_DOMAIN` | unset | Enables `<slug>.<domain>` hosting. Add it in Settings → Variables once you have a domain with a proxied wildcard record; impossible on workers.dev. |
 | `A2W_SITES_PATH_PREFIX` | `/s` | Prefix for path-based hosting. |
-| `A2W_SITE_SANDBOX` | `auto` | `auto` sandboxes only same-origin site content; `always` / `never` override. |
+| `A2W_SITE_SANDBOX` | `auto` | `auto` sandboxes path URLs and leaves a site's own hostname alone; `always` sandboxes both. `never` behaves like `auto`: a path URL shares the admin origin, so it is always sandboxed. |
 | `A2W_MAX_FILE_BYTES` | `5242880` | Per-file limit. |
 | `A2W_MAX_SITE_BYTES` | `26214400` | Per-site limit. Workers allows a 100 MB body but only 128 MB of isolate memory, and content arrives base64-inflated. |
 | `A2W_MAX_FILES` | `200` | Files per site. |
