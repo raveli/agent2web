@@ -225,3 +225,22 @@ test('unterminated and adversarial input is scanned in linear time', () => {
   findMissingReferences([css('s.css', 'url('.repeat(250_000))]);
   assert.ok(performance.now() - started < 1000, 'CSS url( without a closing paren');
 });
+
+// Final review: many references in one inline block must not overflow the stack.
+test('a style block, style attribute or srcset with hundreds of thousands of references does not crash', () => {
+  const many = 'a{background:url(x.png)}'.repeat(200_000);
+  const files = [
+    html('a.html', `<style>${many}</style>`),
+    html('b.html', `<div style="${'background:url(y.png);'.repeat(200_000)}"></div>`),
+    html('c.html', `<img srcset="${'z.png 1x, '.repeat(200_000)}">`),
+  ];
+  const missing = findMissingReferences(files);
+  assert.equal(missing.length, 600_000);
+});
+
+test('empty comments <!--> and <!---> end where browsers end them', () => {
+  assert.deepEqual(
+    findMissingReferences([html('index.html', '<!--><img src="e1.png"><!---><img src="e2.png">')]).map(m => m.resolved),
+    ['e1.png', 'e2.png'],
+  );
+});
