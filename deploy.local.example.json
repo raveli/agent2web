@@ -1,0 +1,7 @@
+{
+  "name": "<your Worker's name, e.g. agent2web>",
+  "d1_database_id": "<uuid from: npx wrangler d1 list>",
+  "vars": {
+    "A2W_SITES_BASE_DOMAIN": "<optional: a wildcard domain routed to this Worker, e.g. sites.example.com>"
+  }
+}

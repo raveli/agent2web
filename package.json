@@ -13,7 +13,8 @@
     "dev": "npm run build && wrangler dev",
     "test": "npm run build && node --test build/test/*.test.js",
     "gen-secrets": "npm run build --silent && node scripts/secrets.mjs",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "deploy:live": "node scripts/deploy-live.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

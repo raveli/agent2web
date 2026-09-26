@@ -56,6 +56,15 @@ the Worker records the origin you reach it on the first time you sign in to
 Variables, when you attach a custom domain — it is the OAuth issuer and the
 audience of every token issued, so from then on it must match exactly.
 
+**Deploying from a checkout.** `wrangler.jsonc` is the button's template, so its
+Worker name is the default and its database id is a placeholder. Plain
+`npm run deploy` therefore does not reach a Worker the button created. Copy
+`deploy.local.example.json` to `deploy.local.json` (git-ignored), fill in your
+Worker's name, database id and any plain-text variables, then run
+`npm run deploy:live`. List every variable your Worker uses there, because a
+deploy replaces the Worker's variables with exactly the ones in the config.
+Secrets are left alone.
+
 **Full guide**, with the terminal route, costs and troubleshooting:
 [docs/deploying.html](docs/deploying.html) — an HTML file, so download it or
 [read it rendered](https://raveli.github.io/agent2web/deploying.html).
