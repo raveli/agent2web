@@ -235,6 +235,8 @@ code {
 /* --------------------------------------------------------------------- steps */
 
 .step { display: grid; grid-template-columns: 26px 1fr; gap: 0 14px; margin: 24px 0 0; }
+/* A grid item's min-width defaults to its content, so a long command would widen the page. */
+.step > div { min-width: 0; }
 .step + .step { margin-top: 26px; }
 .step-num {
   font: 500 12px/22px var(--font-mono); color: var(--fg-subtle);
@@ -298,4 +300,9 @@ abbr[title] { text-decoration: underline dotted var(--fg-subtle); text-underline
   .layout { display: block; }
   body { background: #fff; color: #000; }
   .step, .card, .callout { page-break-inside: avoid; }
+}
+
+/* On a phone a wide table scrolls inside itself rather than widening the page. */
+@media (max-width: 640px) {
+  .content table { display: block; overflow-x: auto; }
 }

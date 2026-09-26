@@ -57,11 +57,11 @@
       <p>One button. Cloudflare clones the repo, creates the database and bucket, and sets up
       automatic redeploys on every push. <span style="color:var(--accent)">Jump to it &rarr;</span></p>
     </a>
-    <a class="card" href="#terminal">
-      <span class="who">If you want to see every step</span>
-      <h3>Deploy from the terminal</h3>
-      <p>Six <code>wrangler</code> commands. Slower, but nothing is hidden and it is the same path
-      you will use for later changes. <span style="color:var(--accent)">Jump to it &rarr;</span></p>
+    <a class="card" href="#the-fork-route">
+      <span class="who">If you want upstream fixes</span>
+      <h3>Deploy your own fork</h3>
+      <p>A real fork that Workers Builds deploys, with your ids kept in Cloudflare rather than in
+      git. Updates are one merge. <span style="color:var(--accent)">Jump to it &rarr;</span></p>
     </a>
   </div>
 
@@ -81,8 +81,8 @@
 npm install
 npm test</div>
       <span class="out-label">Expect</span>
-      <div class="out"># tests 98
-# pass 98
+      <div class="out"># tests 131
+# pass 131
 # fail 0</div>
       <p>The suite bundles the Worker exactly as deployment does, boots it in Miniflare with local
       D1 and R2, and drives it over HTTP. A green run means the code path that deploys works.</p>
@@ -165,8 +165,11 @@ A2W_ADMIN_PASSWORD_HASH=pbkdf2c.100000.6.…
         <span class="label">Nothing else to fill in</span>
         There is no URL to enter — you could not know it yet, and the Worker records the origin you
         reach it on the first time you sign in as the owner. The optional variables are deliberately
-        not declared, because the setup form treats every declared variable as required; add them in
-        Settings &rarr; Variables if and when you need them.
+        not declared, because the setup form treats every declared variable as required. Add them
+        if and when you need them, but note that every deploy replaces the Worker's plain-text
+        variables with the ones in its config, so a variable added only under Settings &rarr;
+        Variables disappears on the next push. The <a href="#the-fork-route">fork route</a> keeps
+        them as build variables instead, which survive.
       </div>
       <div class="callout hard">
         <span class="label">Read this before you rely on the button</span>
@@ -189,34 +192,65 @@ A2W_ADMIN_PASSWORD_HASH=pbkdf2c.100000.6.…
     <div class="step-num">03</div>
     <div>
       <h3 id="the-fork-route">The fork route, if you want upstream fixes</h3>
-      <p>Slightly more setup, and then updates are one command forever. Fork this repository on
-      GitHub, then give your fork the resources the placeholder cannot know:</p>
-      <div class="cmd">npx wrangler d1 create agent2web
+      <p>Slightly more setup, and then updates are one merge forever. Fork this repository on
+      GitHub, then create the two resources the placeholder cannot know:</p>
+      <div class="cmd">npx wrangler d1 create agent2web          <span class="c"># note the database_id it prints</span>
 npx wrangler r2 bucket create agent2web-sites</div>
-      <p>Put the printed <code>database_id</code> into your fork's <code>wrangler.jsonc</code>,
-      replacing <code>placeholder-replaced-on-provision</code>, and commit it. Then connect it:
-      <b>Workers &amp; Pages &rarr; Create application &rarr; Import a repository</b>, pick your
-      fork, and set the build command to <code>npm run build</code> and the deploy command to
-      <code>npx wrangler deploy</code>. Add the secrets from step 01 under
-      Settings&nbsp;&rarr;&nbsp;Variables.</p>
+      <div class="callout hard">
+        <span class="label">Do not commit your ids to the fork</span>
+        A fork of a public repository is public, and GitHub will not let you make it private. Your
+        database id, Worker name and domains belong in Cloudflare, not in the fork's
+        <code>wrangler.jsonc</code>. Leave that file exactly as it is upstream; that also means
+        merging upstream can never conflict.
+      </div>
+      <p>Connect the fork: <b>Workers &amp; Pages &rarr; Create application &rarr; Import a
+      repository</b>, pick your fork, and set:</p>
+      <table>
+        <thead><tr><th>Setting</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Build command</td><td><code>npm run build</code></td></tr>
+          <tr><td>Deploy command</td><td><code>npm run deploy:live</code></td></tr>
+          <tr><td>Production branch</td><td><code>main</code>, with builds for other branches turned off</td></tr>
+        </tbody>
+      </table>
+      <p>Then, under <b>Settings &rarr; Build &rarr; Variables</b>, add the build variables
+      <code>deploy:live</code> reads:</p>
+      <table>
+        <thead><tr><th>Build variable</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td class="mono-cell">A2W_DEPLOY_NAME</td><td>The Worker's name, exactly as the dashboard shows it</td></tr>
+          <tr><td class="mono-cell">A2W_DEPLOY_D1_ID</td><td>The <code>database_id</code> from above</td></tr>
+          <tr><td class="mono-cell">A2W_SITES_BASE_DOMAIN, A2W_PUBLIC_URL, &hellip;</td><td>Any plain-text setting you use, optional</td></tr>
+        </tbody>
+      </table>
+      <p><code>deploy:live</code> puts these into the deployed config and never into git. It passes
+      through only known plain-text settings, so a secret entered here by mistake is not deployed as
+      a readable variable. Add the secrets from step 01 on the Worker itself, under
+      <b>Settings&nbsp;&rarr;&nbsp;Variables and secrets</b>, as type <i>Secret</i>; deploys leave
+      those alone.</p>
       <div class="callout good">
         <span class="label">Then taking a release is one command</span>
-        <div class="cmd" style="margin:10px 0 0">git fetch upstream &amp;&amp; git merge upstream/main</div>
-        A real fork shares history, so this fast-forwards. The only file that can conflict is
-        <code>wrangler.jsonc</code>, and only when this project edits it — keep your ids and drop
-        everything else.
+        <div class="cmd" style="margin:10px 0 0">git fetch upstream &amp;&amp; git merge upstream/main &amp;&amp; git push</div>
+        A real fork shares history and carries no local edits, so this fast-forwards, and the push
+        deploys it.
+      </div>
+      <div class="callout">
+        <span class="label">Deploying from your machine instead</span>
+        Copy <code>deploy.local.example.json</code> to <code>deploy.local.json</code> (git-ignored),
+        fill in the same values, and run <code>npm run deploy:live</code>. An environment variable
+        with the same name wins over the file. Plain <code>npm run deploy</code> uses the
+        placeholder id and fails.
       </div>
       <div class="callout">
         <span class="label">Two things that will bite you</span>
         Workers Builds can only see repositories the <b>Cloudflare Workers &amp; Pages GitHub App</b>
         has been granted access to, which means an account or organisation where you can install it.
-        A repository being public does not make someone else's connectable — so you need your own
-        fork, not this one. And note you cannot fork a repository into the account that already owns
-        it; if you own the upstream, fork into an organisation you control.
+        A repository being public does not make someone else's connectable, so you need your own
+        fork, not this one. You cannot fork a repository into the account that already owns it; if
+        you own the upstream, connect it directly.
         <br><br>
-        The Worker's name in the dashboard must match <code>name</code> in
-        <code>wrangler.jsonc</code>, or the build fails. Importing a repository takes the name from
-        the file, so this only bites when repointing an existing Worker.
+        <code>A2W_DEPLOY_NAME</code> must match the Worker's name in the dashboard. A different name
+        deploys a second, empty Worker beside yours instead of updating it.
       </div>
     </div>
   </div>
@@ -250,7 +284,8 @@ npx wrangler r2 bucket create agent2web-sites</div>
       Worker rather than half-working.</p>
       <div class="callout">
         <span class="label">Later, when you attach a custom domain</span>
-        Set <code>A2W_PUBLIC_URL</code> to the new origin under Settings &rarr; Variables. From then
+        Set <code>A2W_PUBLIC_URL</code> to the new origin, as a build variable if you took the fork
+        route, otherwise under Settings &rarr; Variables. From then
         on it must match exactly — scheme, host, no trailing slash — because it is the audience of
         every token this server issues, and a mismatch breaks Claude's connector while the sites
         themselves keep working.
