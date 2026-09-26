@@ -6,6 +6,7 @@ import { isTextType, type Extraction, type FileEdit, type InputFile, type SiteSt
 import { UserError } from '../../util/errors.js';
 import { formatBytes, plural } from '../../util/html.js';
 import { siteUrls } from '../urls.js';
+import { VERSION } from '../version.js';
 import {
   fail,
   ok,
@@ -436,6 +437,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
           ...siteSummary(config, site),
           files: files.map(f => ({ path: f.path, bytes: f.bytes, content_type: f.content_type })),
           versions: versions.map(versionSummary),
+          server_version: VERSION,
         };
         const fileList = files.length
           ? `\n\nFiles:\n${files.map(f => `- ${f.path} (${formatBytes(f.bytes)})`).join('\n')}`

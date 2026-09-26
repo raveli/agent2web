@@ -1,3 +1,4 @@
+import { VERSION } from '../core/version.js';
 import { Hono } from 'hono';
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import type { Config } from '../core/config.js';
@@ -93,7 +94,7 @@ export function createApp(deps: AppDeps): Hono<Env> {
   });
 
   app.get('/healthz', async c =>
-    c.json({ status: 'ok', sites: await store.countSites(), version: '0.1.0' }),
+    c.json({ status: 'ok', sites: await store.countSites(), version: VERSION }),
   );
 
   app.route('/', oauthRoutes());

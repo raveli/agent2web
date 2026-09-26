@@ -1,6 +1,6 @@
 {
   "name": "agent2web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Self-hosted static site hosting with an MCP publishing API, for HTML built by AI tools like Claude",
   "license": "MIT",
   "type": "module",
