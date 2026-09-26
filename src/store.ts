@@ -36,7 +36,14 @@ export type VersionRow = {
   bytes: number;
   file_count: number;
   created_at: number;
+  /** Who created it: "api-token", "oauth:<client id>", or null for versions from before #16. */
+  actor: string | null;
+  /** A readable name for the actor at the time, e.g. the OAuth client's name. */
+  actor_label: string | null;
 };
+
+/** The caller a store acts for, recorded on every version it creates. */
+export type Actor = { id: string; label?: string };
 
 export type FileRow = {
   version_id: string;
@@ -96,12 +103,18 @@ export class SiteStore {
   private readonly sql: Sql;
 
   constructor(
-    db: ConstructorParameters<typeof Sql>[0],
+    private readonly db: ConstructorParameters<typeof Sql>[0],
     private readonly blobs: R2Bucket,
     private readonly config: Config,
     private readonly crypto: WebCryptoProvider,
+    private readonly actor?: Actor,
   ) {
     this.sql = new Sql(db);
+  }
+
+  /** The same store, recording `actor` on the versions it creates. */
+  as(actor: Actor): SiteStore {
+    return new SiteStore(this.db, this.blobs, this.config, this.crypto, actor);
   }
 
   // ---------------------------------------------------------------- lookups
@@ -591,14 +604,16 @@ export class SiteStore {
     const bytes = files.reduce((n, f) => n + f.bytes, 0);
     const statements: Statement[] = [
       stmt(
-        `INSERT INTO versions (id, site_id, note, bytes, file_count, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO versions (id, site_id, note, bytes, file_count, created_at, actor, actor_label)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         versionId,
         site.id,
         options.note ?? '',
         bytes,
         files.length,
         now,
+        this.actor?.id ?? null,
+        this.actor?.label?.slice(0, 80) ?? null,
       ),
     ];
     for (const file of files) {

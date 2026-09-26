@@ -177,6 +177,15 @@ test('full authorization code flow with PKCE, then publish with the issued token
   });
   assert.equal(publish.result.isError, undefined);
   assert.match(await (await fetch(`${h.baseUrl}/s/via-oauth/`)).text(), /published over oauth/);
+  // The version records which OAuth client made it (backlog #16).
+  const versions = await mcpRequest(h.baseUrl, tokens.access_token, 'tools/call', {
+    name: 'site_list_versions',
+    arguments: { slug: 'via-oauth', response_format: 'json' },
+  });
+  assert.deepEqual(versions.result.structuredContent.versions[0].created_by, {
+    id: `oauth:${client.client_id}`,
+    label: 'Test Client',
+  });
 
   // 8. Refresh rotates the pair, and the superseded refresh token is dead.
   const refreshed = await token({

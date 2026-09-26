@@ -19,6 +19,7 @@ export const CHANGES: { version: string; date: string; notes: string[] }[] = [
       'Password-protected sites can have separate CSS, JS and data files when served on their own hostname; the old advice to inline everything no longer applies there.',
       'site_edit_file changes part of a file; site_extract_file splits a page into files on the server; site_stage_file uploads a large file in chunks.',
       'Updates now fail loudly if a carried-over file is missing, instead of dropping it.',
+      'site_list_versions shows who created each version (created_by), so you can tell whether a site is yours before overwriting it.',
     ],
   },
 ];

@@ -5,6 +5,7 @@ import { createMcpServer } from '../core/mcp/server.js';
 import { PUBLISH_SCOPE } from '../oauth.js';
 import { stringsEqual } from '../util/bytes.js';
 import { rememberPublicUrl } from '../public-url.js';
+import type { Actor } from '../store.js';
 
 /**
  * The MCP endpoint.
@@ -32,22 +33,23 @@ export async function handleMcp(c: Context<Env>): Promise<Response> {
     return unauthorized(c, 'Missing Authorization header');
   }
 
-  let clientId: string | undefined;
+  let actor: Actor;
   if (config.apiToken && stringsEqual(presented, config.apiToken)) {
-    clientId = 'static-api-token';
+    actor = { id: 'api-token', label: 'static API token' };
   } else {
     const auth = await oauth.verifyAccessToken(presented);
     if (!auth) return unauthorized(c, 'Invalid or expired access token');
     if (!auth.scopes.includes(PUBLISH_SCOPE)) {
       return insufficientScope(c);
     }
-    clientId = auth.clientId;
+    const client = await oauth.getClient(auth.clientId);
+    actor = { id: `oauth:${auth.clientId}`, label: client?.client_name };
   }
 
   // Authenticated, so this origin is the owner's. Recorded once, if unset.
   c.executionCtx.waitUntil(rememberPublicUrl(c.var.sql, c.req.url));
 
-  const server = createMcpServer({ config, store });
+  const server = createMcpServer({ config, store: store.as(actor) });
   // Stateless with plain JSON responses: nothing to keep between requests, and
   // a Worker has nowhere to keep it anyway.
   const transport = new WebStandardStreamableHTTPServerTransport({
