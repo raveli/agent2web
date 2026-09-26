@@ -937,6 +937,31 @@ function decode(content: string, encoding: 'utf8' | 'base64', path: string): Uin
   }
 }
 
+/** Staged uploads older than this are abandoned: nothing is going to publish them. */
+export const STAGING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Deletes staged uploads nobody published. site_stage_file writes outside
+ * sites/, so neither pruning nor site deletion ever reaches a file that was
+ * staged and then forgotten. Returns how many objects were removed.
+ */
+export async function purgeStaging(
+  blobs: R2Bucket,
+  now = Date.now(),
+  maxAgeMs = STAGING_MAX_AGE_MS,
+): Promise<number> {
+  let removed = 0;
+  let cursor: string | undefined;
+  do {
+    const page = await blobs.list({ prefix: 'staging/', cursor, limit: 1000 });
+    const stale = page.objects.filter(o => now - o.uploaded.getTime() > maxAgeMs).map(o => o.key);
+    if (stale.length) await blobs.delete(stale as never);
+    removed += stale.length;
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  return removed;
+}
+
 export function isTextType(contentType: string): boolean {
   return (
     contentType.startsWith('text/') ||
