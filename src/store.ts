@@ -8,8 +8,11 @@ import {
   contentTypeFor,
   normalizeSitePath,
   sitePrefix,
+  stagingKey,
+  stagingPrefix,
   versionPrefix,
 } from './core/paths.js';
+import { decodeUtf8 } from './util/bytes.js';
 import { UserError } from './util/errors.js';
 import { isValidSlug, newId, RESERVED_SLUGS, slugify } from './util/ids.js';
 
@@ -47,12 +50,17 @@ export type Visibility = 'public' | 'password' | 'disabled';
 
 export type InputFile = { path: string; content: string; encoding?: 'utf8' | 'base64' };
 
+/** One exact-text replacement, in the spirit of an editor's find-and-replace. */
+export type FileEdit = { old_text: string; new_text: string; replace_all?: boolean };
+
 type PreparedFile = { path: string; data: Uint8Array; contentType: string; sha256: string };
 
 export type PublishOptions = {
   slug?: string;
   title?: string;
   files: InputFile[];
+  /** Paths assembled earlier with stageFile, added to `files` and cleared on success. */
+  staged?: string[];
   note?: string;
   visibility?: Visibility;
   password?: string | null;
@@ -206,6 +214,18 @@ export class SiteStore {
    * guarantee the filesystem version gave by writing into a fresh directory.
    */
   async publish(options: PublishOptions): Promise<PublishResult> {
+    if (options.staged?.length) {
+      if (!options.slug) throw new UserError('Staged files belong to a slug — pass the `slug` you staged them under.');
+      const slug = options.slug.trim().toLowerCase();
+      const staged = await this.loadStaged(slug, options.staged);
+      const result = await this.publish({
+        ...options,
+        files: [...options.files, ...staged],
+        staged: undefined,
+      });
+      await this.clearStaged(slug, options.staged);
+      return result;
+    }
     const prepared = await this.prepareFiles(options.files);
     if (!prepared.some(f => f.path === 'index.html')) {
       throw new UserError(
@@ -291,10 +311,17 @@ export class SiteStore {
     upsert: InputFile[],
     remove: string[],
     note?: string,
+    staged: string[] = [],
   ): Promise<PublishResult> {
     const site = await this.requireSite(slug);
     if (!site.current_version_id) {
       throw new UserError(`Site "${slug}" has no published version yet — use site_publish first.`);
+    }
+    if (staged.length) {
+      const loaded = await this.loadStaged(site.slug, staged);
+      const result = await this.updateFiles(slug, [...upsert, ...loaded], remove, note);
+      await this.clearStaged(site.slug, staged);
+      return result;
     }
     if (upsert.length === 0 && remove.length === 0) {
       throw new UserError('Nothing to do — pass files to `upsert` and/or paths to `remove`.');
@@ -328,6 +355,104 @@ export class SiteStore {
       throw new UserError('That would delete every file. Use site_delete to remove the site.');
     }
     return this.publish({ slug: site.slug, files, note, ifExists: 'new_version' });
+  }
+
+  /**
+   * Applies exact-text replacements to one text file of the current version and
+   * publishes the result, so a change costs the size of the change rather than
+   * the size of the file. Every edit must apply or none do.
+   */
+  async editFile(slug: string, filePath: string, edits: FileEdit[], note?: string): Promise<PublishResult> {
+    if (edits.length === 0) throw new UserError('Pass at least one edit.');
+    const file = await this.readSiteFile(slug, filePath, undefined, Infinity);
+    if (!isTextType(file.contentType)) {
+      throw new UserError(`${file.path} is ${file.contentType}, not text; replace it with site_update_files.`);
+    }
+    let text = decodeUtf8(file.data);
+    edits.forEach((edit, i) => {
+      const label = edits.length > 1 ? `Edit ${i + 1}: ` : '';
+      if (edit.old_text === '') throw new UserError(`${label}old_text must not be empty.`);
+      const count = text.split(edit.old_text).length - 1;
+      if (count === 0) {
+        throw new UserError(
+          `${label}old_text was not found in ${file.path}. It must match the published file exactly, ` +
+            'whitespace included — re-read it with site_read_file. Nothing was changed.',
+        );
+      }
+      if (count > 1 && !edit.replace_all) {
+        throw new UserError(
+          `${label}old_text occurs ${count} times in ${file.path}. Include more surrounding text so it ` +
+            'is unique, or pass replace_all:true. Nothing was changed.',
+        );
+      }
+      // A function replacement, so "$&" and friends in new_text stay literal.
+      text = edit.replace_all
+        ? text.split(edit.old_text).join(edit.new_text)
+        : text.replace(edit.old_text, () => edit.new_text);
+    });
+    return this.updateFiles(slug, [{ path: file.path, content: text, encoding: 'utf8' }], [], note);
+  }
+
+  // ---------------------------------------------------------------- staging
+
+  /**
+   * Writes a file, or appends a chunk to one, in the slug's staging area. Staged
+   * files are never served; they wait for site_publish or site_update_files to
+   * name them. This exists because agents cap the size of a single tool call
+   * far below the per-file limit, so a large page has to arrive in pieces.
+   */
+  async stageFile(slug: string, input: InputFile, append: boolean) {
+    const s = slug.trim().toLowerCase();
+    if (!isValidSlug(s)) throw new UserError(`Invalid slug "${slug}".`);
+    const path = normalizeSitePath(input.path);
+    const encoding = input.encoding ?? 'utf8';
+    if (encoding === 'base64' && input.content.replace(/\s/g, '').length % 4 !== 0) {
+      // atob tolerates missing padding, so a chunk split mid-quantum would
+      // silently lose bits instead of failing.
+      throw new UserError('Each base64 chunk must be a multiple of 4 characters long — split on a 4-character boundary.');
+    }
+    const chunk = decode(input.content, encoding, path);
+    let data = chunk;
+    if (append) {
+      const previous = await this.blobs.get(stagingKey(s, path));
+      if (!previous) {
+        throw new UserError(`Nothing is staged at ${path} for "${s}" yet — send the first chunk with append:false.`);
+      }
+      const head = new Uint8Array(await previous.arrayBuffer());
+      data = new Uint8Array(head.byteLength + chunk.byteLength);
+      data.set(head);
+      data.set(chunk, head.byteLength);
+    }
+    if (data.byteLength > this.config.maxFileBytes) {
+      throw new UserError(
+        `${path} would be ${data.byteLength} bytes, over the ${this.config.maxFileBytes} byte per-file limit.`,
+      );
+    }
+    await this.blobs.put(stagingKey(s, path), data as never);
+    return { slug: s, path, bytes: data.byteLength, staged: await this.listStaged(s) };
+  }
+
+  async listStaged(slug: string): Promise<{ path: string; bytes: number }[]> {
+    const prefix = stagingPrefix(slug);
+    const page = await this.blobs.list({ prefix, limit: 1000 });
+    return page.objects.map(o => ({ path: o.key.slice(prefix.length), bytes: o.size }));
+  }
+
+  private async loadStaged(slug: string, paths: string[]): Promise<InputFile[]> {
+    const files: InputFile[] = [];
+    for (const raw of paths) {
+      const path = normalizeSitePath(raw);
+      const object = await this.blobs.get(stagingKey(slug, path));
+      if (!object) {
+        throw new UserError(`${path} is not staged for "${slug}". Send it with site_stage_file first.`);
+      }
+      files.push({ path, content: encodeBase64(new Uint8Array(await object.arrayBuffer())), encoding: 'base64' });
+    }
+    return files;
+  }
+
+  private async clearStaged(slug: string, paths: string[]): Promise<void> {
+    await this.blobs.delete(paths.map(p => stagingKey(slug, p)) as never).catch(() => {});
   }
 
   private async commitVersion(
@@ -538,6 +663,7 @@ export class SiteStore {
   async deleteSite(slug: string): Promise<SiteRow> {
     const site = await this.requireSite(slug);
     await this.hardDelete(site.id);
+    await this.deleteByPrefix(stagingPrefix(site.slug));
     return site;
   }
 
@@ -683,6 +809,14 @@ function decode(content: string, encoding: 'utf8' | 'base64', path: string): Uin
   } catch {
     throw new UserError(`Content for ${path} is not valid base64.`);
   }
+}
+
+export function isTextType(contentType: string): boolean {
+  return (
+    contentType.startsWith('text/') ||
+    contentType.startsWith('application/json') ||
+    contentType.startsWith('image/svg')
+  );
 }
 
 function encodeBase64(bytes: Uint8Array): string {

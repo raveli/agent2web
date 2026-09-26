@@ -134,3 +134,9 @@ export const versionPrefix = (siteId: string, versionId: string) =>
 export const sitePrefix = (siteId: string) => `sites/${siteId}/`;
 export const blobKey = (siteId: string, versionId: string, path: string) =>
   `${versionPrefix(siteId, versionId)}${normalizeSitePath(path)}`;
+
+// Staged uploads live outside sites/ and are keyed by slug, so a first publish
+// can be assembled before the site (and its id) exists: staging/<slug>/<path>
+export const stagingPrefix = (slug: string) => `staging/${slug}/`;
+export const stagingKey = (slug: string, path: string) =>
+  `${stagingPrefix(slug)}${normalizeSitePath(path)}`;

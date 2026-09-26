@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { decodeUtf8, toBase64 } from '../../util/bytes.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Config } from '../config.js';
-import type { InputFile, SiteStore, Visibility } from '../../store.js';
+import { isTextType, type FileEdit, type InputFile, type SiteStore, type Visibility } from '../../store.js';
 import { UserError } from '../../util/errors.js';
 import { formatBytes, plural } from '../../util/html.js';
 import { siteUrls } from '../urls.js';
@@ -48,6 +48,18 @@ const fileSchema = z.object({
 
 const slugArg = z.string().describe('Slug of the site, as returned by site_publish or site_list.');
 
+const stagedArg = z
+  .array(z.string())
+  .optional()
+  .describe('Paths previously assembled with site_stage_file to include in this version. Cleared once published.');
+
+// Agents cap a single tool call well below the per-file limit (around 40 KB of
+// arguments in practice), and a call cut off mid-string arrives truncated or not
+// at all. Every write tool says how to stay under it.
+const LARGE_FILES =
+  'Keep each call under about 20 KB of content: to change part of a large file use site_edit_file; ' +
+  'to send a large file whole, stage it in chunks with site_stage_file and pass its path in `staged`.';
+
 export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
   const { config, store } = ctx;
   const limits = `Limits: ${config.maxFiles} files, ${formatBytes(config.maxFileBytes)} per file, ${formatBytes(
@@ -64,7 +76,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
         'New sites are password protected by default: pass `password` to choose one, or omit it and a ' +
         'readable password is generated and returned once. To publish something anyone with the link can ' +
         'read, set visibility:"public" AND confirm_public:true — ask the person you are working for first, ' +
-        `because a link that has been shared cannot be unshared. ${limits}`,
+        `because a link that has been shared cannot be unshared. ${LARGE_FILES} ${limits}`,
       inputSchema: {
         slug: z
           .string()
@@ -75,6 +87,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
         title: z.string().optional().describe('Human-readable title shown in listings and on the password page.'),
         html: z.string().optional().describe('Shorthand for a single-file site: the full HTML of index.html.'),
         files: z.array(fileSchema).optional().describe('Full file set for the site. Mutually exclusive with `html`.'),
+        staged: stagedArg,
         note: z.string().optional().describe('Short note describing this version, shown in site_list_versions.'),
         visibility: z
           .enum(['public', 'password', 'disabled'])
@@ -109,7 +122,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
     },
     async args => {
       try {
-        const files = filesFrom(args.html, args.files);
+        const files = filesFrom(args.html, args.files, args.staged);
         if (args.password && args.password.length < 6) {
           throw new UserError('Site password must be at least 6 characters.');
         }
@@ -118,6 +131,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
           slug: args.slug,
           title: args.title,
           files,
+          staged: args.staged,
           note: args.note,
           visibility: args.visibility as Visibility | undefined,
           password: args.password ?? null,
@@ -164,10 +178,12 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
       title: 'Update files in a published site',
       description:
         'Creates a new version of an existing site by adding/replacing the files in `upsert` and deleting the paths in `remove`. ' +
-        'Files not mentioned are carried over unchanged, so this is the cheap way to iterate on one page of a larger site.',
+        'Files not mentioned are carried over unchanged, so this is the cheap way to iterate on one page of a larger site. ' +
+        LARGE_FILES,
       inputSchema: {
         slug: slugArg,
         upsert: z.array(fileSchema).optional().describe('Files to add or replace.'),
+        staged: stagedArg,
         remove: z.array(z.string()).optional().describe('Paths to delete from the site.'),
         note: z.string().optional().describe('Short note describing this version.'),
         response_format: responseFormat,
@@ -186,6 +202,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
           (args.upsert ?? []) as InputFile[],
           args.remove ?? [],
           args.note,
+          args.staged ?? [],
         );
         return ok(
           args.response_format as ResponseFormat,
@@ -198,6 +215,88 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
             result.site,
             (await store.listFiles(result.version.id)).map(f => f.path),
           ),
+        );
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    'site_edit_file',
+    {
+      title: 'Edit part of a published file',
+      description:
+        'Changes a text file in place by exact find-and-replace, and publishes the result as a new version. ' +
+        'Send only the text that changes, so a large page costs as little as the edit. Each `old_text` must ' +
+        'match the published file exactly (read it with site_read_file) and occur once, unless replace_all is set. ' +
+        'Edits apply in order; if any fails, nothing is published.',
+      inputSchema: {
+        slug: slugArg,
+        path: z.string().default('index.html').describe('File to edit, e.g. "index.html".'),
+        edits: z
+          .array(
+            z.object({
+              old_text: z.string().describe('Exact text to find, with enough context to be unique.'),
+              new_text: z.string().describe('Replacement text. Empty deletes old_text.'),
+              replace_all: z.boolean().optional().describe('Replace every occurrence instead of requiring one.'),
+            }),
+          )
+          .min(1)
+          .describe('Replacements to apply, in order.'),
+        note: z.string().optional().describe('Short note describing this version.'),
+        response_format: responseFormat,
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async args => {
+      try {
+        const result = await store.editFile(args.slug, args.path, args.edits as FileEdit[], args.note);
+        return ok(
+          args.response_format as ResponseFormat,
+          `Edited ${args.path} in **${result.site.slug}** (${plural(args.edits.length, 'change')}) — version \`${
+            result.version.id
+          }\`, ${formatBytes(result.version.bytes)}.\n\n${siteUrls(config, result.site).primary}`,
+          { ...siteSummary(config, result.site), version: versionSummary(result.version) },
+        );
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    'site_stage_file',
+    {
+      title: 'Stage a large file in chunks',
+      description:
+        'Uploads a file too large for one call, a chunk at a time, without publishing anything. Send the first ' +
+        'chunk with append:false and each following chunk with append:true, then publish by passing the path in ' +
+        '`staged` to site_update_files (or site_publish for a new site). Keep chunks under about 20 KB. ' +
+        'Staging the same path with append:false starts it over. Works for slugs that do not exist yet.',
+      inputSchema: {
+        slug: z.string().describe('Slug of the site the file is for; it need not exist yet.'),
+        path: z.string().describe('Path the file will have in the site, e.g. "index.html".'),
+        content: z.string().describe('This chunk. For base64, every chunk must be a multiple of 4 characters.'),
+        encoding: z.enum(['utf8', 'base64']).default('utf8').describe('How `content` is encoded.'),
+        append: z.boolean().default(false).describe('false starts the file; true adds this chunk to its end.'),
+        response_format: responseFormat,
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async args => {
+      try {
+        const result = await store.stageFile(
+          args.slug,
+          { path: args.path, content: args.content, encoding: args.encoding },
+          args.append,
+        );
+        const all = result.staged.map(f => `- ${f.path} (${formatBytes(f.bytes)})`).join('\n');
+        return ok(
+          args.response_format as ResponseFormat,
+          `Staged ${result.path} for **${result.slug}**: ${formatBytes(result.bytes)} so far. Not published yet.\n\n` +
+            `Staged for this slug:\n${all}\n\nWhen complete, publish with staged:["${result.path}"].`,
+          result,
         );
       } catch (err) {
         return fail(err);
@@ -298,10 +397,7 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
     async args => {
       try {
         const file = await store.readSiteFile(args.slug, args.path, args.version_id, args.max_bytes);
-        const isText =
-          file.contentType.startsWith('text/') ||
-          file.contentType.startsWith('application/json') ||
-          file.contentType.startsWith('image/svg');
+        const isText = isTextType(file.contentType);
         // Uint8Array, not a Node Buffer: no toString(encoding) to lean on.
         const content = isText ? decodeUtf8(file.data) : toBase64(file.data);
         const structured = {
@@ -546,14 +642,14 @@ export function registerSiteTools(server: McpServer, ctx: ToolContext): void {
   );
 }
 
-function filesFrom(html: string | undefined, files: unknown): InputFile[] {
+function filesFrom(html: string | undefined, files: unknown, staged?: string[]): InputFile[] {
   const list = (files ?? []) as InputFile[];
   if (html !== undefined && list.length > 0) {
     throw new UserError('Pass either `html` (single page) or `files` (multi-file site), not both.');
   }
   if (html !== undefined) return [{ path: 'index.html', content: html, encoding: 'utf8' }];
-  if (list.length === 0) {
-    throw new UserError('Provide `html` for a single page, or `files` for a multi-file site.');
+  if (list.length === 0 && !staged?.length) {
+    throw new UserError('Provide `html` for a single page, `files` for a multi-file site, or `staged` paths.');
   }
   return list;
 }
